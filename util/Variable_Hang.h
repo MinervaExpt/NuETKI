@@ -26,24 +26,11 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
     void InitializeMCHists(std::map<std::string, std::vector<CVUniverse*>>& mc_error_bands,
                            std::map<std::string, std::vector<CVUniverse*>>& truth_error_bands)
     {
-      std::map<int, std::string> BKGLabels = {{0, "NuECC with pions"}, //so this is gonna include events with a proton that falls out of kinematic signal definition
-					      {1, "Other NueCC"}, 
-					      {2, "NC pi0"},
-					      {3, "CC Numu pi0"}};
 
-      
-      
-      //Jeremy's Bkgd Categories
-      //std::map<int, std::string> BKGLabels = {{0, "Other NueCC"}, //so this includes CCQE-like, cause as it stands, because this is the first category after signal, this INCLUDES CCQE-LIKE EVENTS THAT DO NOT HAVE A PROTON!
-      //{1, "nu + e elastic"},
-      //{2, "NC Coh"},
-      //{3, "Other NC"}
-      //{4, "CC Numu pi0"}};
-
-
-      //Hang's Bkgd Categories
-      //to put it
-      
+      std::map<int, std::string> BKGLabels = {{0, "CC numu"},
+					      {1, "NC Coh"}, 
+					      {2, "Other NC"},
+					      {3, "nu + e Elastic"}};
       
       m_backgroundHists = new util::Categorized<Hist, int>((GetName() + "_background").c_str(),
 							   GetName().c_str(), BKGLabels,

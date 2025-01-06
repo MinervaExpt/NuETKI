@@ -1,0 +1,11 @@
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110000_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110002_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110003_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110005_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110006_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110008_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110010_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110013_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110015_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110016_Playlist.root
+root://fndca1.fnal.gov:1094///pnfs/fnal.gov/usr/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110012_Playlist.root

@@ -26,24 +26,13 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
     void InitializeMCHists(std::map<std::string, std::vector<CVUniverse*>>& mc_error_bands,
                            std::map<std::string, std::vector<CVUniverse*>>& truth_error_bands)
     {
-      std::map<int, std::string> BKGLabels = {{0, "NuECC with pions"}, //so this is gonna include events with a proton that falls out of kinematic signal definition
-					      {1, "Other NueCC"}, 
-					      {2, "NC pi0"},
-					      {3, "CC Numu pi0"}};
-
-      
-      
-      //Jeremy's Bkgd Categories
-      //std::map<int, std::string> BKGLabels = {{0, "Other NueCC"}, //so this includes CCQE-like, cause as it stands, because this is the first category after signal, this INCLUDES CCQE-LIKE EVENTS THAT DO NOT HAVE A PROTON!
-      //{1, "nu + e elastic"},
-      //{2, "NC Coh"},
-      //{3, "Other NC"}
-      //{4, "CC Numu pi0"}};
-
-
-      //Hang's Bkgd Categories
-      //to put it
-      
+                                                                     //for my purposes, signal proton => 0.45<P_p<1.2 and theta_p < 70
+      std::map<int, std::string> BKGLabels = {{0, "NueCC_1+p_1+pi"}, //so signal, but also allowing final state mesons...
+					      {1, "NueCC_nonSignalProton"},    //no signal proton, but yes any proton (no restriction on momentum or angle)
+					      {2, "Other NueCC"},    //no true proton at all, so any reco proton was a misidentified meson or something
+					      {3, "NumuCC"},
+					      {4, "NC with pi0"},
+                                              {5, "Other NC"}};
       
       m_backgroundHists = new util::Categorized<Hist, int>((GetName() + "_background").c_str(),
 							   GetName().c_str(), BKGLabels,
