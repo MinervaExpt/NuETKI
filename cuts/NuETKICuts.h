@@ -145,17 +145,17 @@ namespace reco
     }
   };
 
-  //LeptonPt , gonna leave this one for later since it's not a branch straight up, it's some calculated quantity. double check ryan's to see how he does this cut
+  //ElectronPt , gonna leave this one for later since it's not a branch straight up, it's some calculated quantity. double check ryan's to see how he does this cut
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
-  class LeptonPt: public PlotUtils::Cut<UNIVERSE, EVENT>
+  class ElectronPt: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    LeptonPt(): PlotUtils::Cut<UNIVERSE, EVENT>("Electron transverse momentum") {}
+    ElectronPt(): PlotUtils::Cut<UNIVERSE, EVENT>("Electron transverse momentum") {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetLeptonPt() > 0.2 && univ.GetLeptonPt() < 1.6);
+      return (univ.GetElectronPt() > 0.2 && univ.GetElectronPt() < 1.6);
     }
   };
 
@@ -238,10 +238,10 @@ namespace reco
   };
 
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
-  class ProtonAngle: public PlotUtils::Cut<UNIVERSE, EVENT>
+  class ProtonTheta: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ProtonAngle(): PlotUtils::Cut<UNIVERSE, EVENT>("Reco proton angle < 70 deg") {}
+    ProtonTheta(): PlotUtils::Cut<UNIVERSE, EVENT>("Reco proton angle < 70 deg") {}
     
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
@@ -336,7 +336,7 @@ namespace reco
 	if (prong_part_scores[i] > 0.7) passesCut = true;
       }
       */
-      return (univ.GetHighestEMLikeShowerScore() > 0.7);
+      return (univ.GetEMLikeShowerScore() > 0.7);
     }
   };
 

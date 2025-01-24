@@ -1,6 +1,6 @@
-#define MC_OUT_FILE_NAME "MC_Nov_22_2024_EAvail_WITHCUT.root"
-#define MC_TUPLE_OUT_FILE_NAME "MC_TUPLE_Nov_22_2024_ModEAvail_WITHCUT.root"
-#define DATA_OUT_FILE_NAME "Data_Nov_22_2024_EAvail_WITHCUT.root"
+#define MC_OUT_FILE_NAME "MC_Jan_24_2025.root"
+#define MC_TUPLE_OUT_FILE_NAME "MC_TUPLE_Jan_24_2025.root"
+#define DATA_OUT_FILE_NAME "Data_Jan_24_2025.root"
 //#define MC_OUT_FILE_NAME "efficiencyTesting.root"
 //#define DATA_OUT_FILE_NAME "dummyData.root"
 //bool write_tree = true;
@@ -449,15 +449,15 @@ int main(const int argc, const char** argv)
   preCuts.emplace_back(new reco::ZRange<CVUniverse, MichelEvent>("Tracker", minZ, maxZ));
   preCuts.emplace_back(new reco::Apothem<CVUniverse, MichelEvent>(apothem));
   preCuts.emplace_back(new reco::HasNoMichel<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ModifiedEavailable<CVUniverse, MichelEvent>());
+  //preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::ModifiedEavailable<CVUniverse, MichelEvent>());
   preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, MichelEvent>());
   preCuts.emplace_back(new reco::ESC<CVUniverse, MichelEvent>());
 
   //preCuts.emplace_back(new reco::ProtonMomentum<CVUniverse, MichelEvent>());
   //preCuts.emplace_back(new reco::Psi<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ProtonAngle<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::LeptonPt<CVUniverse, MichelEvent>());
+  //preCuts.emplace_back(new reco::ProtonTheta<CVUniverse, MichelEvent>());
+  //preCuts.emplace_back(new reco::ElectronPt<CVUniverse, MichelEvent>());
   //preCuts.emplace_back(new reco::EleptonSin2Theta<CVUniverse, MichelEvent>());
   
 
@@ -537,14 +537,15 @@ int main(const int argc, const char** argv)
                       robsEmuBins = {0,1,2,3,4,5,7,9,12,15,18,22,36,50,75,100,120},
 		      //protonMomentumBins = {0.0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0},
 			protonMomentumBins = {0.0,0.08,0.16,0.24,0.32,0.40,0.48,0.56,0.64,0.72,0.8,0.88,0.96,1.04,1.12,1.2,1.28,1.36,1.44,1.52,1.6},
-		      //Pt_bins = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2},
+                      //Pt_bins = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2},
 		      Pt_bins = {0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5},
 		      KE_bins = {0.0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0, 1.25, 1.5},
 		      EavailBins = {0, 0.04, 0.08, 0.12, 0.16, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1, 1.2},
 		      robsRecoilBins,
 		      electronAngleBins = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40},
-		      //protonAngleBins = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90},
 		      protonAngleBins = {0,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180},
+                      phiAngleBins = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100},
+                      deltaPtXBins = {-2, -1.8, -1.6, -1.4, -1.2,-1,-0.8,-0.6,-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2},
                       electronEnergyBins = {0.0,0.5,1.0,1.5,2,2.5,3.0,3.5,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,20};
 			//electronEnergyBins = {0.0,0.25,0.5,0.75,1.0,1.25,1.5,1.75,2,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,9,10,12.5,15,17.5,20};
 
@@ -564,47 +565,44 @@ int main(const int argc, const char** argv)
   for(int whichBin = 0; whichBin < 100 + 1; ++whichBin) robsRecoilBins.push_back(robsRecoilBinWidth * whichBin);
 
   std::vector<Variable*> vars = {
-    new Variable("E_nu", "E_{nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
-    //new Variable("E_avail", "E_{avail} [GeV]", EavailBins, &CVUniverse::GetEavail, &CVUniverse::GetEavailTrue),
-    new Variable("Lepton_Pt", "lepton Pt [GeV/c]", Pt_bins, &CVUniverse::GetLeptonPt, &CVUniverse::GetTrueLeptonPt), //for the true variable I just have a placeholder, don't think it matters until I do cross section stuff?
+    //Reco variables
+    new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
+    new Variable("E_avail", "E_{avail} [GeV]", EavailBins, &CVUniverse::GetEavail, &CVUniverse::GetEavailTrue),
+    new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", Pt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue), //for the true variable I just have a placeholder, don't think it matters until I do cross section stuff?
     new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElepTrueGeV),
-    new Variable("Theta_lep", "#theta_{lep}", electronAngleBins, &CVUniverse::GetElectronAngleDeg, &CVUniverse::GetEnuTrue),    
-    new Variable("RecoProtonP", "Reco P_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetTrueProtonP),    
-    new Variable("RecoProtonTheta", "Reco #theta_{p}", protonAngleBins, &CVUniverse::GetProtonTheta, &CVUniverse::GetTrueProtonAngle),    
-
-    //variables for efficiency plots (true variables)
+    new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetEnuTrue),    
+    new Variable("RecoProtonP", "P_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),    
+    new Variable("RecoProtonTheta", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonTheta, &CVUniverse::GetProtonThetaTrue),    
+    //tki vars start here
+    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", Pt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDummyVar),
+    new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDummyVar),
+    new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDummyVar),
+    new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetDummyVar),
+    new Variable("PhiPt", "#delta#phi_{T} [deg]", phiAngleBins, &CVUniverse::GetPhiT, &CVUniverse::GetDummyVar),
+    
+    //true variables
     //new Variable("E_lep", "True Electron Energy", electronEnergyBins, &CVUniverse::GetElectronEnergyTrue, &CVUniverse::GetElectronEnergyTrue),
-    //new Variable("ProtonKE", "True proton KE [GeV]", KE_bins, &CVUniverse::GetTrueProtonKE, &CVUniverse::GetTrueProtonKE),
-    new Variable("ProtonKE", "True proton KE [GeV]", KE_bins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueProtonKE),
+    new Variable("ProtonKE", "T_{p} true [GeV]", KE_bins, &CVUniverse::GetDummyVar, &CVUniverse::GetProtonKETrue),
+    new Variable("ProtonP", "p_{p} true [GeV/c]", protonMomentumBins, &CVUniverse::GetDummyVar, &CVUniverse::GetProtonPTrue),
+    new Variable("Theta_p", "#theta_{p} true [deg]", protonAngleBins, &CVUniverse::GetDummyVar, &CVUniverse::GetProtonThetaTrue),
+    new Variable("Pt_p", "p_{T,p} true [GeV/c]", Pt_bins, &CVUniverse::GetDummyVar, &CVUniverse::GetProtonPtTrue),
+    new Variable("Theta_p_e", "#theta_{e,p} true [deg]", protonAngleBins, &CVUniverse::GetDummyVar, &CVUniverse::GetOpeningAngleTrue),
+    new Variable("Pt_lep", "p_{T,e} true [GeV]", Pt_bins, &CVUniverse::GetDummyVar, &CVUniverse::GetElectronPtTrue)
 
-    //new Variable("ProtonP", "True proton momentum [GeV/c]", protonMomentumBins, &CVUniverse::GetTrueProtonP, &CVUniverse::GetTrueProtonP),
-    new Variable("ProtonP", "True proton momentum [GeV/c]", protonMomentumBins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueProtonP),
-
-    //new Variable("Theta_p", "True proton angle [deg]", protonAngleBins, &CVUniverse::GetTrueProtonAngle, &CVUniverse::GetTrueProtonAngle),
-    new Variable("Theta_p", "True proton angle [deg]", protonAngleBins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueProtonAngle),
-
-    //new Variable("Pt_p", "True proton Pt [GeV/c]", Pt_bins, &CVUniverse::GetTrueProtonPt, &CVUniverse::GetTrueProtonPt),
-    new Variable("Pt_p", "True proton Pt [GeV/c]", Pt_bins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueProtonPt),
-
-    //new Variable("Theta_p_e", "Opening angle b/w proton & lepton [deg]", protonAngleBins, &CVUniverse::GetTrueProtonToElectronAngle, &CVUniverse::GetTrueProtonToElectronAngle),
-    new Variable("Theta_p_e", "Opening angle b/w proton & lepton [deg]", protonAngleBins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueProtonToElectronAngle),
-
-    //new Variable("Pt_lep", "True lepton Pt [GeV]", Pt_bins, &CVUniverse::GetTrueLeptonPt, &CVUniverse::GetTrueLeptonPt),
-    new Variable("Pt_lep", "True lepton Pt [GeV]", Pt_bins, &CVUniverse::GetDummyRecoVar, &CVUniverse::GetTrueLeptonPt),
-
-    //gonna put my cut variables here... just for checking the cuts, can have em off most of the time
-    //new Variable("EMScore", "EMShower Score", a, &CVUniverse::GetHighestEMLikeShowerScore, &CVUniverse::GetDummyRecoVar),
-    //new Variable("DSCalVisE", "DSCalVisE", b, &CVUniverse::GetDSCalVisE, &CVUniverse::GetDummyRecoVar),
-    //new Variable("ODCalVisE", "ODCalVisE", c, &CVUniverse::GetODCalVisE, &CVUniverse::GetDummyRecoVar),
-    //new Variable("VertexTrackMultiplicity", "Vertex Track Multiplicity", d, &CVUniverse::GetVertexTrackMultiplicity, &CVUniverse::GetDummyRecoVar),
-    //new Variable("MeanFront_dEdX", "Mean Front dE/dX [MeV/cm]", e, &CVUniverse::GetMeanFrontdEdx, &CVUniverse::GetDummyRecoVar),
-    //new Variable("NonMIPClusFrac", "Non MIP Cluster Fraction", f, &CVUniverse::GetNonMIPClusFrac, &CVUniverse::GetDummyRecoVar),
-    //new Variable("TransverseGapScore", "Transverse Gap Score", g, &CVUniverse::GetTransverseGapScore, &CVUniverse::GetDummyRecoVar),
-    //new Variable("Psi", "Psi", h, &CVUniverse::GetPsi, &CVUniverse::GetDummyRecoVar),
-    new Variable("E_avail", "E_avail", i, &CVUniverse::GetEavail, &CVUniverse::GetDummyRecoVar),
-    //new Variable("E_lep", "E_lep", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetDummyRecoVar),
-    //new Variable("ESCChi2", "ESC Proton Chi2", j, &CVUniverse::GetProtonESCNodeChi2, &CVUniverse::GetDummyRecoVar),
-    //new Variable("Michel", "N michels", k, &CVUniverse::GetImprovedNMichel, &CVUniverse::GetDummyRecoVar)
+    //Cut variables (aka the things I cut on)
+    //new Variable("EMScore", "EMShower Score", a, &CVUniverse::GetEMLikeShowerScore, &CVUniverse::GetDummyVar),
+    //new Variable("DSCalVisE", "DSCalVisE", b, &CVUniverse::GetDSCalVisE, &CVUniverse::GetDummyVar),
+    //new Variable("ODCalVisE", "ODCalVisE", c, &CVUniverse::GetODCalVisE, &CVUniverse::GetDummyVar),
+    //new Variable("VertexTrackMultiplicity", "Vertex Track Multiplicity", d, &CVUniverse::GetVertexTrackMultiplicity, &CVUniverse::GetDummyVar),
+    //new Variable("MeanFront_dEdX", "Mean Front dE/dX [MeV/cm]", e, &CVUniverse::GetMeanFrontdEdx, &CVUniverse::GetDummyVar),
+    //new Variable("NonMIPClusFrac", "Non MIP Cluster Fraction", f, &CVUniverse::GetNonMIPClusFrac, &CVUniverse::GetDummyVar),
+    //new Variable("TransverseGapScore", "Transverse Gap Score", g, &CVUniverse::GetTransverseGapScore, &CVUniverse::GetDummyVar),
+    //new Variable("Psi", "Psi", h, &CVUniverse::GetPsi, &CVUniverse::GetDummyVar),
+    //new Variable("E_avail", "E_avail", i, &CVUniverse::GetEavail, &CVUniverse::GetDummyVar),
+    //new Variable("Modified_E_avail", "Modified_E_avail", i, &CVUniverse::GetModifiedEavail, &CVUniverse::GetDummyVar),
+    //new Variable("E_lep", "E_lep", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetDummyVar),
+    //new Variable("ESCChi2", "ESC Proton Chi2", j, &CVUniverse::GetProtonESCNodeChi2, &CVUniverse::GetDummyVar),
+    //new Variable("Michel", "N michels", k, &CVUniverse::GetImprovedNMichel, &CVUniverse::GetDummyVar)
   };
   
   std::cout << "Carlos: Making sure I get proton angle: " << vars[9]->GetName() << ", and proton momentum: "<< vars[8]->GetName() << "\n";
@@ -619,7 +617,7 @@ int main(const int argc, const char** argv)
 
 
   std::vector<Study*> studies;
-  //studies.push_back(new CutStudies(preCuts, "E_Avail",));
+  //studies.push_back(new MichelSideband(vars, error_bands, truth_bands, data_band));
 
   CVUniverse* data_universe = new CVUniverse(options.m_data);
   std::vector<CVUniverse*> data_band = {data_universe};
@@ -635,7 +633,7 @@ int main(const int argc, const char** argv)
   for(auto& var: vars2D) var->InitializeDATAHists(data_band);
 
   //k all the histograms get initialized here, so I'll initialize the new ttree here. and the file as well Ig, might as well
-  TFile* mcOutTuple = TFile::Open(MC_TUPLE_OUT_FILE_NAME, "RECREATE"); //careful with the recreate carlos    
+  TFile* mcOutTuple = TFile::Open(MC_TUPLE_OUT_FILE_NAME, "RECREATE"); //careful with the recreate carlos, it will overwrite if existing
   //TTree *outputTree = new TTree("selectedEvents", "Events that passed the selection");
 
   //now we need to clone the old, input tree to get all of the same branches... but I can't find it?
@@ -650,6 +648,7 @@ int main(const int argc, const char** argv)
   try
   {
     CVUniverse::SetTruth(false);
+    //I edited this line to add the selectionCategory branch, because I need to use it when filling the tuple, which happens in the same place the histos are filled.
     LoopAndFillEventSelection(options.m_mc, error_bands, vars, vars2D, studies, mycuts, model, outputTree, selectionCategory);
     CVUniverse::SetTruth(true);
     LoopAndFillEffDenom(options.m_truth, truth_bands, vars, vars2D, mycuts, model);
