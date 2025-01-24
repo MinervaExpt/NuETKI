@@ -60,6 +60,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   static constexpr int PDG_n = 2112;
   static constexpr int PDG_p = 2212;
 
+  static constexpr double pi = 3.141592653589793;
   // ========================================================================
   // Write a "Get" function for all quantities access by your analysis.
   // For composite quantities (e.g. Enu) use a calculator function.
@@ -69,258 +70,142 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // E.g. GetPmu, GetEmu, etc.
   // ========================================================================
 
-  // Quantities only needed for cuts
-  // Although unlikely, in principle these quanties could be shifted by a
-  // systematic. And when they are, they'll only be shifted correctly if we
-  // write these accessor functions.
-  
-  //Muon kinematics
-  double GetMuonPT() const //GeV/c
-  {
-    return GetPmu()/1000. * sin(GetThetamu());
+  // ========================================================================
+  // Reco kinematics
+  // ========================================================================  
+
+  //total energy including rin GeV
+  double GetElectronEnergy() const {
+    return GetVecElem("prong_part_E", 0, 3)/1000.;
   }
 
-  double GetMuonPz() const //GeV/c
-  {
-    return GetPmu()/1000. * cos(GetThetamu());
+  //Copied the overall format here from Ryan/Hang/Sarah's CCNue kinematics calculator, there may be a better way to do this?
+  //Also extremely suspect for right now
+  //returns in rad
+  double GetElectronTheta() const { 
+    std::vector<std::vector<double> > electronp = GetVecOfVecDouble("prong_part_E");
+    ROOT::Math::XYZVector p(electronp[0][0], electronp[0][1], electronp[0][2]);
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.));
+    return (r(p)).Theta();
   }
 
-  double GetMuonPTTrue() const //GeV/c
-  {
-    return GetPlepTrue()/1000. * sin(GetThetalepTrue());
+  //mostly for plotting
+  double GetElectronThetaDeg() const {
+    double rad = GetElectronTheta();
+    double deg = rad*180/pi;
+    return deg;
   }
 
-  double GetMuonPzTrue() const //GeV/c
-  {
-    return GetPlepTrue()/1000. * cos(GetThetalepTrue());
-  }
-
-  double GetEmuGeV() const //GeV
-  {
-    return GetEmu()/1000.;
-  }
-
-  double GetElepTrueGeV() const //GeV
-  {
-    return GetElepTrue()/1000.;
-  }
-
-  int GetInteractionType() const {
-    return GetInt("mc_intType");
-  }
-
-  int GetTargetNucleon() const {
-    return GetInt("mc_targetNucleon");
+  //Electron kinetic energy (T) in GeV
+  double GetElectronT() const{
+    double leptonT = GetElectronEnergy() - M_e/1000.; //E_e from the function is in GeV, M_e is in MeV
+    if (leptonT > 0){
+      return leptonT;
+    }
+    else return 0; 
+    //return sqrt(std::max(0, (pow(GetElectronEnergy(), 2) - M_lep_sqr)));
   }
   
-  double GetBjorkenXTrue() const {
-    return GetDouble("mc_Bjorkenx");
-  }
-
-  double GetBjorkenYTrue() const {
-    return GetDouble("mc_Bjorkeny");
-  }
-
-  virtual bool IsMinosMatchMuon() const {
-    return GetInt("has_interaction_vertex") == 1;
-  }
-
-  //----------------------Start of Carlos's extra getters----------------------------------
-  
-  virtual bool IsNuEelastic() const {
-    return GetInt("mc_intType") == 7;
-  }
-  
-  //in GeV
-  double GetElectronEnergyTrue() const {
-    double out = GetVecElem("mc_primFSLepton", 3)/1000.;
-    //std::cout << "True Lepton Energy: " << out << std::endl;
-    return out;
-  }
-
-  //This is kind of hacky, might change, but because I'm writing a bunch of proton truth calculators, I don't want to keep finding the 
-  //Highest energy proton from mc_FSPartPDG. So this is a function which should only get called by other functions here in CVUniverse.h
-  //Just returns the index value (in the final state particles array of the particular event) of the highest energy proton
-  //and -999 if no true protons
-  int GetHighestEnergySignalProtonIndex() const {
-    double highestEnergy = -999;
-    int index = -999;
-    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
-    //fs particle energies in MeV
-    std::vector<double> energies = GetVecDouble("mc_FSPartE");
-    for (int i = 0; i < FSParticles.size(); i++){
-      //So I can choose to count any protons, or only protons above our reco threshold. 
-      //if (FSParticles[i] == 2212){
-      if (FSParticles[i] == 2212 && energies[i] > highestEnergy){
-	//require momentum between 450 and 1200 MeV/C , and angle under 70 degrees (same as other TKI analyses)
-	
-	double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2)); //in MeV/C
-	ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i)); 
-	ROOT::Math::RotationX r(-3.3 * (3.141592 / 180.));
-	double protonTheta = (r(p)).Theta()*(180/3.141592); //in degrees
-	if (protonP>450 && protonP<1200 && protonTheta<70){
-	  highestEnergy = energies[i];
-	  index = i;
-	}
-      }
+  //Electron momentum in GeV
+  double GetElectronP() const{
+    double M_lep_sqr = pow(M_e, 2) / pow(10, 6);  //over 10^6 to convert to GeV^2
+    double leptonP = pow(GetElectronEnergy(), 2)-M_lep_sqr;
+    if (leptonP > 0){
+      return sqrt(leptonP);
     }
-    return index;
+    else return 0; 
+    //return sqrt(std::max(0, (pow(GetElectronEnergy(), 2) - M_lep_sqr)));
   }
 
-  bool GetHasSignalFSProton() const{
-    bool hasProton = false;
-    int i = GetHighestEnergySignalProtonIndex();
-    if (i>-1){
-      hasProton = true;
-    }
-    return hasProton;
+  //Transverse momentum of the lepton (electron for me), in GeV
+  double GetElectronPt() const{
+    return (GetElectronP() * std::sin(GetElectronTheta()));
   }
 
-  //For background categorization, how many events have protons that just don't land in my signal region cuts?
-  bool GetHasAnyFSProton() const {
-    bool hasProton = false;
-    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
-    for (int i = 0; i < FSParticles.size(); i++){
-      if (FSParticles[i] == 2212){
-	hasProton = true;
-      }
-    }
-    return hasProton;
+  //Longitudinal momentum of the lepton (electron for me), in GeV
+  double GetElectronPParallel() const{
+    return (GetElectronP() * std::cos(GetElectronTheta()));
   }
 
-
-  //gets highest true proton kinetic energy in GeV, -999 (- M_p for now, will fix) if no true protons
-  double GetTrueProtonKE() const {
-    int highestProtonIndex = GetHighestEnergySignalProtonIndex();
-    if (highestProtonIndex > -1){
-      double out = (GetVecElem("mc_FSPartE", highestProtonIndex) - M_p)/1000.;
-      //std::cout << "True (highest) Proton KE: " << out << std::endl;
-      return out;
-    }
-    else {
-      return -999; 
-    }
-  }
-
-  
-
-  //proton theta (spherical coords, in deg) wrt beam direction, -999 if no true protons
-  double GetTrueProtonAngle() const {
-    int i = GetHighestEnergySignalProtonIndex();
-    if (i > -1){
-      ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
-      ROOT::Math::RotationX r(-3.3 * (3.141592 / 180.));
-      double out = (r(p)).Theta()*(180/3.141592);
-      //std::cout << "True (highest energy) proton Theta: " << out << std::endl;
-      return out;
-    }
-    else {
-      return -999; 
-    }
-  }
-  
-  //Angle (in deg) between true primary electron and true highest energy proton in rad, -999 if no protons
-  double GetTrueProtonToElectronAngle() const {
-    int i = GetHighestEnergySignalProtonIndex();
-    if (i > -1){
-      std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
-
-      ROOT::Math::XYZVector electron(electronp[0], electronp[1], electronp[2]);
-      ROOT::Math::XYZVector proton(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
-      
-      double dotProd = electron.Dot(proton);
-
-      //no shot this just works first try
-      double out = std::acos(dotProd/( sqrt( electron.Mag2() * proton.Mag2() ))) * (180/3.141592);
-      //std::cout << "True angle between electron and (highest energy) proton: " << out << std::endl;
-      return out;
-    }
-    else {
-      return -999; 
-    }
-  }
-  
-  //MasterAnaDev_proton_P_fromdEdx, convert to GeV
-  double GetProtonP() const {
-    double protonP = GetDouble("MasterAnaDev_proton_P_fromdEdx");
-    //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
-    if (protonP>-9999){
-      return protonP/1000.;
-    }
-    else{
-      return protonP;
-    }
-  }
-  
-  //MasterAnaDev_proton_theta, then convert to deg
+  //MasterAnaDev_proton_theta, in rad
   double GetProtonTheta() const {
+    double protonTheta = GetDouble("MasterAnaDev_proton_theta");
+    return protonTheta;
+
+    //TO DO: THESE TWO SETS OF QUANTITIES ARE NOT EXACTLY THE SAME. they almost are, but not quite?
+    //Find out why, which one to use, and does it matter? Gonna use MAD one for now
+
+    //double protonTheta1 = GetDouble("MasterAnaDev_proton_theta");
+    //double protonPhi1 = GetDouble("MasterAnaDev_proton_phi");
+
+    //double protonTheta2 = (r(protonP_vec)).Theta();
+    //double protonPhi2 = (r(protonP_vec)).Phi(); 
+
+  }
+
+  //same thing but in rad, useful for plotting. Also if there's no proton candidate don't convert it
+  double GetProtonThetaDeg() const {
     double protonTheta = GetDouble("MasterAnaDev_proton_theta");
     //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
     if (protonTheta > -9999){
-      return protonTheta * (180/3.141592);
+      return protonTheta * (180/pi);
     }
     else {
       return protonTheta;
     }
   }
 
+  //Kinetic energy (T) of ONLY the primary proton candidate
+  double GetProtonT() const {
+    double protonT = GetDouble("MasterAnaDev_proton_calib_energy"); //TO DO !! MAKE SURE THIS IS ACTUALLY T AND NOT TOTAL E
+    if (protonT>-9999){ //aka is there a proton candidate
+      return protonT/1000.;
+    }
+    else{
+      return protonT;
+    }
+  }
 
-  //Returns momentum of the highest energy true final state proton (in GeV)
-  double GetTrueProtonP() const {
-    int i = GetHighestEnergySignalProtonIndex();
-    if (i > -1){
-      double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
-      //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
+  //Total Kinetic energy (sigma T) of all proton candidates
+  double GetSumProtonT() const {
+    double primary_proton_energy = GetDouble("MasterAnaDev_proton_calib_energy");
+    if (primary_proton_energy < -1) { primary_proton_energy= 0; } //branch is set to -9999 by default, but tbh this shouldn't matter cause if there's no primary there shouldn't be any secondaries....
+    
+    //very few events have tracked secondary protons honestly... about 10% of my overall sample, fewer for signal
+
+    //couple subtleties about this...
+    // 1. make sure this is never -9999
+    // 2. this is just kinetic energy, I want total right??? Because E_nu = E_e + E_avail, so it must include the rest mass right? same for above tbh, i think calib energy is just kinetic...
+    double sum_secondary_proton_energy = 0;
+    std::vector<double> secondary_protons = GetVecDouble("MasterAnaDev_sec_protons_T_fromCalo");
+    for (int i = 0; i < secondary_protons.size(); i++){
+      sum_secondary_proton_energy += secondary_protons[i];
+    }
+
+    return primary_proton_energy + sum_secondary_proton_energy;
+  }
+  //MasterAnaDev_proton_P_fromdEdx, in GeV
+  double GetProtonP() const {
+    double protonP = GetDouble("MasterAnaDev_proton_P_fromdEdx");
+    //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
+    if (protonP>-9999){ //aka is there a proton candidate
       return protonP/1000.;
     }
-    else {
-      return -999;
+    else{
+      return protonP;
     }
   }
 
-  //true proton pT (in GeV) of highest energy proton
-  double GetTrueProtonPt() const {
-    int i = GetHighestEnergySignalProtonIndex();
-    if (i > -1){
-      //returns momentum in GeV, so convert to MeV which is what M_p is in, should be good
-      double protonP = GetTrueProtonP()*1000.;
-      double protonAngleRad = GetTrueProtonAngle()*(3.141592/180);
-      
-      double out = (protonP * std::sin(protonAngleRad))/1000.;	
-      //std::cout << "True (highest energy) proton pT: " << out << std::endl;
-      return out;
-    }
-    else {
-      return -999; 
-    }
-  }
-  
-  double GetTrueElectronAngle() const {
-    std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
-    ROOT::Math::XYZVector p(electronp[0], electronp[1], electronp[2]);   
-    ROOT::Math::RotationX r(-3.3 * (3.141592 / 180.));
-    return (r(p)).Theta();    
+  //proton transverse momentum, in GeV
+  double GetProtonPt() const{
+    return (GetProtonP() * std::sin(GetProtonTheta()));
   }
 
-  //True lepton pT (in GeV)
-  double GetTrueLeptonPt() const {
-    double leptonP = sqrt(pow(GetVecElem("mc_primFSLepton", 3), 2) - pow(M_e, 2));
-    double out = (leptonP * std::sin(GetTrueElectronAngle()))/1000.;
-    //std::cout << "True lepton pT: " << out << std::endl;
-    return out;
+  //proton longitudinal momentum, in GeV
+  double GetProtonPParallel() const{
+    return (GetProtonP() * std::cos(GetProtonTheta()));
   }
 
-  //This is for if I want to have a truth variable, i.e. I want to plot true proton momentum vs true proton angle
-  //I need to put something for the reco var, and I don't want to write the function for reco proton momentum and angle yet.
-  double GetDummyRecoVar() const {
-    return -999; 
-  }
-
-  //getter for the branch improved_nmichel, for the michel electron cut. This will probably get fancier. 
-  int GetImprovedNMichel() const {
-    return GetInt("improved_nmichel");
-  }
-  
   //Hadronic available energy (no neutrons) in GeV
   double GetEavail() const {
     double E = GetDouble("blob_recoil_E_tracker") + GetDouble("blob_recoil_E_ecal");
@@ -339,6 +224,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     if (primary_proton_energy < -1) { primary_proton_energy= 0; } //branch is set to -9999 by default
 
     //very few events have tracked secondary protons honestly... about 10% of my overall sample, fewer for signal
+
+    //couple subtleties about this...
+    // 1. make sure this is never -9999
+    // 2. this is just kinetic energy, I want total right??? Because E_nu = E_e + E_avail, so it must include the rest mass right? same for above tbh, i think calib energy is just kinetic...
     double sum_secondary_proton_energy = 0;
     std::vector<double> secondary_protons = GetVecDouble("MasterAnaDev_sec_protons_T_fromCalo");
     for (int i = 0; i < secondary_protons.size(); i++){
@@ -353,29 +242,263 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return ModEavail/1000.;
   }
 
-  
+  //in GeV, also note I changed the truth version in opt/include/PlotUtils/TruthFunctions.h to match. So if I reinstall or something check that.
   double GetEnu() const {
     double Enu = GetEavail() + GetElectronEnergy();
     //std::cout << "Reco Enu: " << Enu << std::endl;
     return Enu;
   }
 
-  //Fairly confident in this one?
-  double GetElectronEnergy() const {
-    return GetVecElem("prong_part_E", 0, 3)/1000.;
+  //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum
+  ROOT::Math::XYZVector GetElectronPtVec() const{
+    std::vector<std::vector<double> > electronP = GetVecOfVecDouble("prong_part_E");
+    ROOT::Math::XYZVector electronP_vec(electronP[0][0]/1000., electronP[0][1]/1000., electronP[0][2]/1000.);
+
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //This object represents a slight rotation about the x axis so that the theta we get is wrt to the beam direction and not the z axis, which points down to the ground 3.3 degrees. we can then apply r to the two vectors above
+    ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //the reverse rotation to get back to lab coords (3.3 is positive now)
+
+    //perform the rotation, basically transforming to new beam based coord system
+    ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+
+    //Now set z to zero in the beam frame to get only the transverse components, then rotate back
+    electronPt_vec.SetZ(0); 
+    electronPt_vec = r2(electronPt_vec);
+
+    return electronPt_vec;
+  }
+  
+  //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum
+  ROOT::Math::XYZVector GetProtonPtVec() const{
+    ROOT::Math::XYZVector protonP_vec(GetDouble("MasterAnaDev_proton_Px_fromdEdx")/1000., GetDouble("MasterAnaDev_proton_Py_fromdEdx")/1000., GetDouble("MasterAnaDev_proton_Pz_fromdEdx")/1000.);
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.)); 
+    ROOT::Math::RotationX r2(3.3 * (pi / 180.));
+
+    ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+    protonPt_vec.SetZ(0);
+    protonPt_vec = r2(protonPt_vec);
+
+    return protonPt_vec;
+  }
+  
+  //Returns a root XYZVector object containing the sum of the proton transverse 3 momentum and the lepton (electron) transverse 3 momentum
+  //which is then used to calculate TKI variables
+  //Remember: z direction != beam direction so transverse doesn't exactly mean z components are zero, although they should be small
+  ROOT::Math::XYZVector GetDeltaPtVec() const{
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
+    ROOT::Math::XYZVector protonPt_vec = GetProtonPtVec();
+        
+    //ROOT::Math::XYZVector deltaP_vec = electronP_vec + protonP_vec; //sum of the full 3 momenta. Not sure if I need this so commenting it out for now
+    ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
+    
+    //std::cout << "delta P total (kinda useless?): " << sqrt(deltaP_vec.Mag2()) << std::endl;
+    //std::cout << "delta Ptx: " << deltaPt_vec.X() << std::endl;
+    //std::cout << "delta Pty: " << deltaPt_vec.Y() << std::endl;
+    //std::cout << "delta Pt: " << sqrt(deltaPt_vec.Mag2()) << std::endl;
+    //std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n" << std::endl;
+    return deltaPt_vec;
+  }
+  
+  //delta Pt (magnitude of the vector), in GeV
+  double GetDeltaPt() const{
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
+    //std::cout << "delta Pt: " << sqrt(deltaPt_vec.Mag2()) << std::endl;
+    return sqrt(deltaPt_vec.Mag2()); 
   }
 
-  //Copied the overall format here from Ryan/Hang/Sarah's CCNue kinematics calculator, there may be a better way to do this?
-  //Also extremely suspect for right now
-  //returns in rad
-  double GetElectronAngle() const { 
-    std::vector<std::vector<double> > electronp = GetVecOfVecDouble("prong_part_E");
-    ROOT::Math::XYZVector p(electronp[0][0], electronp[0][1], electronp[0][2]);
-    ROOT::Math::RotationX r(-3.3 * (3.141592 / 180.));
-    //r = ROOT::Math::RotationX(-3.3 * (3.141592 / 180.))(r);
-    return (r(p)).Theta();
+  //GeV
+  double GetDeltaPtX() const{
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
+    //std::cout << "delta pT X: " << deltaPt_vec.X() << std::endl;
+    return deltaPt_vec.X(); 
   }
 
+  //GeV
+  double GetDeltaPtY() const{
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
+    //std::cout << "delta pT Y: " << deltaPt_vec.Y() << std::endl;
+    return deltaPt_vec.Y(); 
+  }
+
+  //Alpha_t, the TKI boosting angle. it's the angle between inverted electron pT and delta pT
+  double GetAlphaT() const{
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
+
+    std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
+    std::cout << "delta p_t vector:    ( " << deltaPt_vec.X() << ", " << deltaPt_vec.Y() << ", " << deltaPt_vec.Z() << " )" << std::endl;
+
+    //angle between the two vectors
+    double numerator = ((-1*electronPt_vec).Dot(deltaPt_vec));
+    double denominator = ( sqrt(electronPt_vec.Mag2()) * sqrt(deltaPt_vec.Mag2()) );
+    double alpha = std::acos(numerator/denominator);
+
+    //std::cout << "boosting angle alpha: " << alpha * 180/pi << std::endl;
+    return alpha * 180/pi;  //return alpha in degrees cause that's how I've set up my bins for now
+  }
+
+  //Phi_t 
+  double GetPhiT() const{
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
+    ROOT::Math::XYZVector protonPt_vec = GetProtonPtVec();
+
+    //std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
+    //std::cout << "proton p_t vector:   ( " << protonPt_vec.X() << ", " << protonPt_vec.Y() << ", " << protonPt_vec.Z() << " )" << std::endl;
+    
+    //angle between the two vectors 
+    double numerator = ((-1*electronPt_vec).Dot(protonPt_vec));
+    double denominator = ( sqrt(electronPt_vec.Mag2()) * sqrt(protonPt_vec.Mag2()) );
+    double phi = std::acos(numerator/denominator);
+
+    //std::cout << "TKI phi: " << phi * 180/pi << std::endl;
+    return phi * 180/pi;  //return in degrees cause that's how I've set up my bins for now
+  }
+
+  //Delta P parallel, or the sum of longitudinal momentum of proton & electron.
+  //Because this is 1D only can just sum the two values I already have
+  //Don't need to mess about with vectors, and those functions already return neg & pos w.r.t. beam direction
+  double GetDeltaPParallel() const{
+    return GetElectronPParallel() + GetProtonPParallel();
+  }
+  
+  virtual double GetQ2Reco() const{
+    return GetDouble("qsquared_recoil");
+  }
+
+  //GetRecoilE is designed to match the NSF validation suite
+  virtual double GetRecoilE() const {
+    return GetVecElem("recoil_summed_energy", 0);
+  }
+  
+  //Definitely possible mistakes in here...
+  virtual double Getq3() const{
+    double eavail = GetEavail()/pow(10,3);
+    double q2 = GetQ2Reco() / pow(10,6);
+    double q3mec = sqrt(eavail*eavail + q2);
+    return q3mec;
+  }
+  
+  // ========================================================================
+  // Truth kinematics
+  // ========================================================================  
+
+  //in GeV
+  double GetElectronEnergyTrue() const {
+    double out = GetVecElem("mc_primFSLepton", 3)/1000.;
+    //std::cout << "True Lepton Energy: " << out << std::endl;
+    return out;
+  }
+
+  //gets highest true proton kinetic energy in GeV, -999 (- M_p for now, will fix) if no true protons
+  double GetProtonKETrue() const {
+    int highestProtonIndex = GetHighestEnergySignalProtonIndex();
+    if (highestProtonIndex > -1){
+      double out = (GetVecElem("mc_FSPartE", highestProtonIndex) - M_p)/1000.;
+      //std::cout << "True (highest) Proton KE: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+
+  //proton theta (spherical coords, in deg) wrt beam direction, -999 if no true protons
+  double GetProtonThetaTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.));
+      double out = (r(p)).Theta()*(180/pi);
+      //std::cout << "True (highest energy) proton Theta: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+  
+  //Angle (in deg) between true primary electron and true highest energy proton in rad, -999 if no protons
+  double GetOpeningAngleTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
+
+      ROOT::Math::XYZVector electron(electronp[0], electronp[1], electronp[2]);
+      ROOT::Math::XYZVector proton(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
+      
+      double dotProd = electron.Dot(proton);
+
+      //no shot this just works first try
+      double out = std::acos(dotProd/( sqrt( electron.Mag2() * proton.Mag2() ))) * (180/pi);
+      //std::cout << "True angle between electron and (highest energy) proton: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+
+  //Returns momentum of the highest energy true final state proton (in GeV)
+  double GetProtonPTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
+      //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
+      return protonP/1000.;
+    }
+    else {
+      return -999;
+    }
+  }
+
+  //true proton pT (in GeV) of highest energy proton
+  double GetProtonPtTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      //returns momentum in GeV, so convert to MeV which is what M_p is in, should be good
+      double protonP = GetProtonPTrue()*1000.;
+      double protonAngleRad = GetProtonThetaTrue()*(pi/180);
+      
+      double out = (protonP * std::sin(protonAngleRad))/1000.;	
+      //std::cout << "True (highest energy) proton pT: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+  
+  double GetElectronThetaTrue() const {
+    std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
+    ROOT::Math::XYZVector p(electronp[0], electronp[1], electronp[2]);   
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //This is a slight rotation so that the theta we get is wrt to the beam direction and not the z axis, which points down to the ground 3.3 degrees. 
+    return (r(p)).Theta();    
+  }
+
+  //True lepton pT (in GeV)
+  double GetElectronPtTrue() const {
+    double leptonP = sqrt(pow(GetVecElem("mc_primFSLepton", 3), 2) - pow(M_e, 2));
+    double out = (leptonP * std::sin(GetElectronThetaTrue()))/1000.;
+    //std::cout << "True lepton pT: " << out << std::endl;
+    return out;
+  }
+
+  //p sure this is wrong because it will include invisible energy (from neutrons n shit)
+  //Ok for now though, I think that only comes into play when we start looking at migration matrices & systematics etc
+  double GetEavailTrue() const {
+    return (GetDouble("mc_incomingE") - GetVecElem("mc_primFSLepton", 3))/1000.;
+  }
+  
+  // ========================================================================
+  // Other reco variables
+  // Mostly used for evaluating cuts, mostly straight from the tuple (other than ESC)
+  // ========================================================================  
+
+  int GetImprovedNMichel() const {
+    return GetInt("improved_nmichel");
+  }
+  
+  //MASSIVE TO DO: I HAVE NO IDEA WHAT THIS DOES AND COPIED IT AS IS FROM DAN
+  //FIGURE OUT EXACTLY WHAT IT DOES AND VERIFY THAT IT WORKS AS INTENDED IN MY SELECTION
   double GetProtonESCNodeChi2() const {
     //I really have absolutely no idea where these hardcoded means and sigmas come from, these were in Dan's CCQENu cuts...
     //std::vector<double> means;
@@ -411,7 +534,8 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	}
       }
     }
-    //Bit hacky cause in Dan's original CCQENu this was a separate function, but I don't think I'll ever need it otherwise...
+    
+    //Bit hacky cause in Dan's original CCQENu this was a separate function, but I don't think I'll ever need it anywhere else
     else{
       bool pass;
 
@@ -454,43 +578,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return chi2;
   }
 
-  
-  double GetElectronAngleDeg() const {
-    double rad = GetElectronAngle();
-    double deg = rad*180/3.141592;
-    return deg;
-  }
-  //p sure this is wrong because it will include invisible energy (from neutrons n shit)
-  //Ok for now though, I think that only comes into play when we start looking at migration matrices etc
-  //Focus on reco values right now I think so I can match Ryan's selection
-  double GetEavailTrue() const {
-    return (GetDouble("mc_incomingE") - GetVecElem("mc_primFSLepton", 3))/1000.;
-  }
-
-  //Apparently this is already defined somewhere, right now I'm assuming it works like this but should double check that at some point
-  //double GetEnuTrue() const {
-  //return GetDouble("mc_incomingE")/1000.;
-  //}
-
-  //LeptonP in GeV
-  double GetLeptonP() const{
-    double M_lep_sqr = pow(M_e, 2) / pow(10, 6);  //over 10^6 to convert to GeV^2
-    double leptonP = pow(GetElectronEnergy(), 2)-M_lep_sqr;
-    if (leptonP > 0){
-      return sqrt(leptonP);
-    }
-    else return 0; 
-    //return sqrt(std::max(0, (pow(GetElectronEnergy(), 2) - M_lep_sqr)));
-  }
-
-  double GetLeptonPt() const{
-    return (GetLeptonP() * std::sin(GetElectronAngle()));
-  }
-
-  //This is E_lep * theta_lep^2
+  //This is E_lep * theta_lep^2, Ryan uses it for a cut but I don't at the moment
   double GetETheta() const {
-    //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronAngle()), 2);
-    double etheta = GetElectronEnergy() * pow(GetElectronAngle(), 2);
+    //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
+    double etheta = GetElectronEnergy() * pow(GetElectronTheta(), 2);
     //std::cout << "E*theta^2: " << etheta << std::endl;
     return etheta;
   }
@@ -513,7 +604,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //if (GetVecElem("prong_HCALVisE", 0)==-999 && GetVecElem("prong_ECALVisE", 0)==-999) {	return 0; }
     if (GetVecElem("prong_HCALVisE", 0)==0 && GetVecElem("prong_ECALVisE", 0)==0) { return 0; }
     else { return GetVecElem("prong_HCALVisE", 0) / GetVecElem("prong_ECALVisE", 0); }
-
   }
 
   double GetODCalVisE() const {
@@ -548,13 +638,13 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetVecElem("prong_NonMIPClusFrac", 0);
   }
 
-  //For afterpulsing
+  //For afterpulsing cut
   double GetFirstFireFraction() const {
     return GetVecElem("prong_FirstFireFraction", 0);
   }
 
-  //todo: rename this
-  double GetHighestEMLikeShowerScore() const {
+  //todo: rename this, its not the highest just the first (electron candidate is always the first prong)
+  double GetEMLikeShowerScore() const {
     double score = GetVecElem("prong_part_score", 0);
     //std::cout << "emscore: " << score << std::endl;
     return score;
@@ -572,17 +662,9 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetInt("HasNoBackExitingTracks");
   }
   
-  ROOT::Math::XYZTVector GetVertex() const
-  {
+  ROOT::Math::XYZTVector GetVertex() const {
     ROOT::Math::XYZTVector result;
     result.SetCoordinates(GetVec<double>("vtx").data());
-    return result;
-  }
-
-  ROOT::Math::XYZTVector GetTrueVertex() const
-  {
-    ROOT::Math::XYZTVector result;
-    result.SetCoordinates(GetVec<double>("mc_vtx").data());
     return result;
   }
 
@@ -590,23 +672,73 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetInt("phys_n_dead_discr_pair_upstream_prim_track_proj");
   }  
   
-  virtual double GetQ2Reco() const{
-    return GetDouble("qsquared_recoil");
-  }
-
-  //GetRecoilE is designed to match the NSF validation suite
-  virtual double GetRecoilE() const {
-    return GetVecElem("recoil_summed_energy", 0);
+  // ========================================================================
+  // Other truth variables
+  // ========================================================================  
+  int GetInteractionType() const {
+    return GetInt("mc_intType");
   }
   
-  //Definitely possible mistakes in here...
-  virtual double Getq3() const{
-    double eavail = GetEavail()/pow(10,3);
-    double q2 = GetQ2Reco() / pow(10,6);
-    double q3mec = sqrt(eavail*eavail + q2);
-    return q3mec;
+  virtual bool IsNuEelastic() const {
+    return GetInt("mc_intType") == 7;
   }
-   
+  
+  //This is kind of hacky, might change, but because I'm writing a bunch of proton truth calculators, I don't want to keep finding the 
+  //Highest energy proton from mc_FSPartPDG. So this is a function which should only get called by other functions here in CVUniverse.h
+  //Just returns the index value (in the final state particles array of the particular event) of the highest energy proton
+  //and -999 if no true protons
+  int GetHighestEnergySignalProtonIndex() const {
+    double highestEnergy = -999;
+    int index = -999;
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    //fs particle energies in MeV
+    std::vector<double> energies = GetVecDouble("mc_FSPartE");
+    for (int i = 0; i < FSParticles.size(); i++){
+      //So I can choose to count any protons, or only protons above our reco threshold. 
+      //if (FSParticles[i] == 2212){
+      if (FSParticles[i] == 2212 && energies[i] > highestEnergy){
+	//require momentum between 450 and 1200 MeV/C , and angle under 70 degrees (same as other TKI analyses)
+	
+	double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2)); //in MeV/C
+	ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i)); 
+	ROOT::Math::RotationX r(-3.3 * (pi / 180.));
+	double protonTheta = (r(p)).Theta()*(180/pi); //in degrees
+	if (protonP>450 && protonP<1200 && protonTheta<70){
+	  highestEnergy = energies[i];
+	  index = i;
+	}
+      }
+    }
+    return index;
+  }
+
+  bool GetHasSignalFSProton() const{
+    bool hasProton = false;
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i>-1){
+      hasProton = true;
+    }
+    return hasProton;
+  }
+
+  //For background categorization, how many events have protons that just don't land in my signal region cuts?
+  bool GetHasAnyFSProton() const {
+    bool hasProton = false;
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (FSParticles[i] == 2212){
+	hasProton = true;
+      }
+    }
+    return hasProton;
+  }
+
+  ROOT::Math::XYZTVector GetTrueVertex() const {
+    ROOT::Math::XYZTVector result;
+    result.SetCoordinates(GetVec<double>("mc_vtx").data());
+    return result;
+  }
+
   virtual int GetCurrent() const { return GetInt("mc_current"); }
 
   virtual int GetTruthNuPDG() const { return GetInt("mc_incoming"); }
@@ -674,6 +806,72 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return hasPi0;
   }
 
+  //This is for if I want to have a truth variable, i.e. I want to plot true proton momentum vs true proton angle
+  //I need to put something for the reco var, and I don't want to write the function for reco proton momentum and angle yet.
+  //
+  //Update jan 2025 - i actually don't think I need this, the VariableBase() constructor might do this automatically if you
+  //don't provide a reco OR truth getter unction? need to double check tho
+  double GetDummyVar() const {
+    return -999; 
+  }
+  
+  // ========================================================================
+  // START OF PRE EXISTING GETTERS THAT I DON'T USE
+  // mostly muon kinematic stuff, didn't feel like getting rid of it
+  // ========================================================================  
+
+  // Quantities only needed for cuts
+  // Although unlikely, in principle these quanties could be shifted by a
+  // systematic. And when they are, they'll only be shifted correctly if we
+  // write these accessor functions.
+
+  //Muon kinematics
+  double GetMuonPT() const //GeV/c
+  {
+    return GetPmu()/1000. * sin(GetThetamu());
+  }
+
+  double GetMuonPz() const //GeV/c
+  {
+    return GetPmu()/1000. * cos(GetThetamu());
+  }
+
+  double GetMuonPTTrue() const //GeV/c
+  {
+    return GetPlepTrue()/1000. * sin(GetThetalepTrue());
+  }
+
+  double GetMuonPzTrue() const //GeV/c
+  {
+    return GetPlepTrue()/1000. * cos(GetThetalepTrue());
+  }
+
+  double GetEmuGeV() const //GeV
+  {
+    return GetEmu()/1000.;
+  }
+
+  double GetElepTrueGeV() const //GeV
+  {
+    return GetElepTrue()/1000.;
+  }
+
+  int GetTargetNucleon() const {
+    return GetInt("mc_targetNucleon");
+  }
+  
+  double GetBjorkenXTrue() const {
+    return GetDouble("mc_Bjorkenx");
+  }
+
+  double GetBjorkenYTrue() const {
+    return GetDouble("mc_Bjorkeny");
+  }
+
+  virtual bool IsMinosMatchMuon() const {
+    return GetInt("has_interaction_vertex") == 1;
+  }  
+  
   virtual double GetMuonQP() const {
     return GetDouble((GetAnaToolName() + "_minos_trk_qp").c_str());
   }
