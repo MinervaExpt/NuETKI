@@ -61,6 +61,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   static constexpr int PDG_p = 2212;
 
   static constexpr double pi = 3.141592653589793;
+
+  //what is this actual number supposed to be?
+  //static constexpr double beam_tilt = 3.2627; //beam tilt downward with respect to z axis, in degrees
+
   // ========================================================================
   // Write a "Get" function for all quantities access by your analysis.
   // For composite quantities (e.g. Enu) use a calculator function.
@@ -187,7 +191,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //MasterAnaDev_proton_P_fromdEdx, in GeV
   double GetProtonP() const {
     double protonP = GetDouble("MasterAnaDev_proton_P_fromdEdx");
-    //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
     if (protonP>-9999){ //aka is there a proton candidate
       return protonP/1000.;
     }
@@ -242,13 +245,13 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return ModEavail/1000.;
   }
 
-  //in GeV, also note I changed the truth version in opt/include/PlotUtils/TruthFunctions.h to match. So if I reinstall or something check that.
+  //in GeV, also note I changed the truth version in opt/include/PlotUtils/TruthFunctions.h to match (aka put it in GeV). So if I reinstall or something check that.
   double GetEnu() const {
     double Enu = GetEavail() + GetElectronEnergy();
     //std::cout << "Reco Enu: " << Enu << std::endl;
     return Enu;
   }
-
+  
   //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum
   ROOT::Math::XYZVector GetElectronPtVec() const{
     std::vector<std::vector<double> > electronP = GetVecOfVecDouble("prong_part_E");
@@ -305,27 +308,27 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return sqrt(deltaPt_vec.Mag2()); 
   }
 
-  //GeV
+  //GeV  (THIS IS WRONG, DOUBLE CHECK THE DEFINITION)
   double GetDeltaPtX() const{
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
     //std::cout << "delta pT X: " << deltaPt_vec.X() << std::endl;
     return deltaPt_vec.X(); 
   }
 
-  //GeV
+  //GeV (THIS IS WRONG, DOUBLE CHECK THE DEFINITION)
   double GetDeltaPtY() const{
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
     //std::cout << "delta pT Y: " << deltaPt_vec.Y() << std::endl;
     return deltaPt_vec.Y(); 
   }
-
+  
   //Alpha_t, the TKI boosting angle. it's the angle between inverted electron pT and delta pT
   double GetAlphaT() const{
     ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
 
-    std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
-    std::cout << "delta p_t vector:    ( " << deltaPt_vec.X() << ", " << deltaPt_vec.Y() << ", " << deltaPt_vec.Z() << " )" << std::endl;
+    //std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
+    //std::cout << "delta p_t vector:    ( " << deltaPt_vec.X() << ", " << deltaPt_vec.Y() << ", " << deltaPt_vec.Z() << " )" << std::endl;
 
     //angle between the two vectors
     double numerator = ((-1*electronPt_vec).Dot(deltaPt_vec));
@@ -352,7 +355,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //std::cout << "TKI phi: " << phi * 180/pi << std::endl;
     return phi * 180/pi;  //return in degrees cause that's how I've set up my bins for now
   }
-
+  
   //Delta P parallel, or the sum of longitudinal momentum of proton & electron.
   //Because this is 1D only can just sum the two values I already have
   //Don't need to mess about with vectors, and those functions already return neg & pos w.r.t. beam direction
@@ -515,7 +518,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //sigmas.push_back(2.232);
     double z = GetProtonEndZ();
     if (z < -1){ return 999; } //if there's no reco proton, this cut fails
+    //actually this is already handled below... if there's no reco proton, n_nodes is 0 and it fails
     
+    //Where on earth are these numbers from
+    //I found it, docdb 27170 from Dan
     double means[5] = {31.302, 11.418, 9.769, 8.675, 7.949};
     double sigmas[5] = {8.997, 3.075, 2.554, 2.484, 2.232};
     
@@ -582,7 +588,16 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   double GetETheta() const {
     //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
     double etheta = GetElectronEnergy() * pow(GetElectronTheta(), 2);
-    //std::cout << "E*theta^2: " << etheta << std::endl;
+    //std::cout << "E_lep*theta^2:      " << etheta << std::endl;
+    return etheta;
+  }
+
+  //But he calls it (and it seems like it really should be) E_lep * sin^2(theta), so that's what im gonna calculate here...
+  double GetELepSin2Theta() const {
+    //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
+    double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
+    //std::cout << "E_lep*sin(theta)^2: " << etheta << std::endl;
+    //std::cout << " " << std::endl;
     return etheta;
   }
 
@@ -602,14 +617,14 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //std::cout << "prong_HCALVisE: " << GetVecElem("prong_HCALVisE", 0) << std::endl;
     //std::cout << "prong_ECALVisE: " << GetVecElem("prong_ECALVisE", 0) << std::endl;
     //if (GetVecElem("prong_HCALVisE", 0)==-999 && GetVecElem("prong_ECALVisE", 0)==-999) {	return 0; }
-    if (GetVecElem("prong_HCALVisE", 0)==0 && GetVecElem("prong_ECALVisE", 0)==0) { return 0; }
+    if (GetVecElem("prong_HCALVisE", 0)<=0 && GetVecElem("prong_ECALVisE", 0)<=0) { return 0; }
     else { return GetVecElem("prong_HCALVisE", 0) / GetVecElem("prong_ECALVisE", 0); }
   }
 
   double GetODCalVisE() const {
     //std::cout << "prong_ODVisE: " << GetVecElem("prong_ODVisE", 0) << std::endl;
     //std::cout << "prong_SideECALVisE: " << GetVecElem("prong_SideECALVisE", 0) << std::endl;
-    if (GetVecElem("prong_ODVisE", 0)==0 && GetVecElem("prong_SideECALVisE", 0)==0) { return 0; }
+    if (GetVecElem("prong_ODVisE", 0)<=0 && GetVecElem("prong_SideECALVisE", 0)<=0) { return 0; }
     else { return GetVecElem("prong_ODVisE", 0) / GetVecElem("prong_SideECALVisE", 0); }
   }
 
@@ -668,6 +683,19 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return result;
   }
 
+  //This returns 0 or 1, 1 if its in it, 0 if its not
+  int GetWithinFiducialApothem() const {
+    const ROOT::Math::XYZTVector vertex = GetVertex();
+    const double slope = -1./sqrt(3.);
+    const double apothem = 850.;
+    //So there are two checks here that if they're both true, means we have to be within the right apothem
+    //take the abs value of both x and y, to move our point into the first quadrant just to not have to worry about sign
+    //first we do the easy one-> is x less than the apothem (cause minerva's hexagon is flat on the left/right, pointy on top)
+    //then, we check if y < (-1/sqrt(3))x + 2a/sqrt(3) which is the equation for the top right line segment (slope of -1/sqrt(3) and y offset of 2a/sqrt(3).
+    //a being the apothem, and 2a/sqrt(3) being the distance from the center of the hexagon to the pointy top (or any other vertex)
+    return (fabs(vertex.x()) < apothem)   &&   (fabs(vertex.y()) < slope*fabs(vertex.x()) + 2.*apothem/sqrt(3.));
+  }
+
   virtual int GetTDead() const {
     return GetInt("phys_n_dead_discr_pair_upstream_prim_track_proj");
   }  
@@ -676,6 +704,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // Other truth variables
   // ========================================================================  
   int GetInteractionType() const {
+    // 4
     return GetInt("mc_intType");
   }
   
