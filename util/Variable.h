@@ -15,12 +15,16 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
 {
   private:
     typedef PlotUtils::HistWrapper<CVUniverse> Hist;
+    typedef std::function<double(const CVUniverse&)> PointerToCVUniverseFunction;
   public:
     template <class ...ARGS>
     Variable(ARGS... args): PlotUtils::VariableBase<CVUniverse>(args...)
     {
     }
 
+    PointerToCVUniverseFunction GetRecoFunc() { return m_pointer_to_GetRecoValue; }
+    PointerToCVUniverseFunction GetTrueFunc() { return m_pointer_to_GetTrueValue; }
+  
     //TODO: It's really silly to have to make 2 sets of error bands just because they point to different trees.
     //      I'd rather the physics of the error bands remain the same and just change which tree they point to.
     void InitializeMCHists(std::map<std::string, std::vector<CVUniverse*>>& mc_error_bands,
@@ -54,6 +58,11 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
       selectedSignalReco = new Hist((GetName() + "_selected_signal_reco").c_str(), GetName().c_str(), GetBinVec(), mc_error_bands);
       selectedMCReco = new Hist((GetName() + "_selected_mc_reco").c_str(), GetName().c_str(), GetBinVec(), mc_error_bands);
       migration = new PlotUtils::Hist2DWrapper<CVUniverse>((GetName() + "_migration").c_str(), GetName().c_str(), GetBinVec(), GetBinVec(), mc_error_bands);
+
+      //I added this cause I couldn't find this info anywhere in the output root file, even though it's part of the Variable() constructor
+      //Looks like I've been putting it in but it doesn't get used anywhere, so here we are.
+      //I only need to do one of them cause I just need to grab the string from any of the hists when I plot
+      selectedSignalReco->hist->GetXaxis()->SetTitle(GetAxisLabel().c_str());
     }
 
     //Histograms to be filled
@@ -69,6 +78,9 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
     void InitializeDATAHists(std::vector<CVUniverse*>& data_error_bands)
     {
       dataHist = new Hist((GetName() + "_data").c_str(), GetName().c_str(), GetBinVec(), data_error_bands);
+
+      //same as above but for data in case I'm only plotting data and don't have access to the axis label from the mc hist.
+      dataHist->hist->GetXaxis()->SetTitle(GetAxisLabel().c_str());
     }
 
     void WriteData(TFile& file)
