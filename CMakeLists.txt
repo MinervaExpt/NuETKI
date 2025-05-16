@@ -60,7 +60,7 @@ find_package(GENIEXSecExtract REQUIRED)
 include_directories(${GENIEXSecExtract_INCLUDE_DIR})
 
 #Tell CMake to compile subdirectories before compiling main application
-add_subdirectory(playlists)
+#add_subdirectory(playlists) 
 add_subdirectory(util)
 #TODO: Split these directories' headers into .cpp files
 #add_subdirectory(event)
