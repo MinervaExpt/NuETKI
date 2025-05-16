@@ -1,1 +1,0 @@
-install(FILES MAD_minervame1A_MC_andrewsGPVM.txt MAD_minervame1A_DATA_andrewsGPVM.txt DESTINATION etc/playlists)
