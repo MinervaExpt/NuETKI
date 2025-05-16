@@ -1,4 +1,4 @@
-// =============================================================================
+// ============================================================================
 // Base class for an un-systematically shifted (i.e. CV) universe. Implement
 // "Get" functions for all the quantities that you need for your analysis.
 //
@@ -78,7 +78,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // Reco kinematics
   // ========================================================================  
 
-  //total energy including rin GeV
+  //total energy including rest mass in GeV
   double GetElectronEnergy() const {
     return GetVecElem("prong_part_E", 0, 3)/1000.;
   }
@@ -405,6 +405,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //proton theta (spherical coords, in deg) wrt beam direction, -999 if no true protons
+  //in deg
   double GetProtonThetaTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
     if (i > -1){
@@ -543,7 +544,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     
     //Bit hacky cause in Dan's original CCQENu this was a separate function, but I don't think I'll ever need it anywhere else
     else{
-      bool pass;
+      bool pass = true;
 
       //Cut Values based on 22302 (carlos - i assume this is a docdb number? -> yes)
       //Node 0-1
@@ -576,7 +577,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	if(nodesNormE[5] < cutval5){ pass = false; }
       }
       //survived loops?
-      pass = true;
       if(pass) chi2=0;
       else chi2=75;
     }
