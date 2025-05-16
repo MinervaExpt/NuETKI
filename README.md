@@ -1,4 +1,4 @@
-# CC QELike TKI Cross Section for MINERvA
+# CC QELike Nu_e TKI Cross Section for MINERvA
 A fork of Andrew's 2021 Cross Section tutorial which serves as the base for my analysis package/framework
 
 
