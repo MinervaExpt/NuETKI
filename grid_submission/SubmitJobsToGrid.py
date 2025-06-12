@@ -22,18 +22,17 @@ def writeEventLoop(mywrapper,outdir,playlist,pdg,filename):
     #mywrapper.write("./Event_Selection_Tracker_anyMode . "+playlist+" "+pdg+" "+str(filename))
 
     #Determine playlist from input...
-    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_mc_"+playlist+".txt |& tee CutSummary.txt")
+    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mad_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mad_mc_"+playlist+".txt |& tee CutSummary.txt")
 
     
     #one run of data and MC each, for testing
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/data_test.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mc_test.txt |& tee CutSummary.txt")
-    # |& tee CutSummary.txt
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/data_test.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mc_test.txt |& tee CutSummary.txt")
     
     #same as above just different runs, for cross checking
     #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/data_test_2.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mc_test_2.txt")
 
     #one quarter me1A, using xrd
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/data_one_fourth_me1A.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mc_one_fourth_me1A.txt")
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/data_one_fourth_me1A.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mc_one_fourth_me1A.txt |& tee CutSummary.txt")
     
     #Full me1A, using xrd
     #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_data_minervame1A.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_mc_minervame1A.txt |& tee CutSummary.txt")
@@ -49,8 +48,8 @@ def writeEventLoop(mywrapper,outdir,playlist,pdg,filename):
     mywrapper.write("echo \"carlos - now trying to copy output to pnfs\"\n")
     mywrapper.write("ifdh cp ./*.root "+outdir)
     #Carlos added so I could get my cut summary
-    #mywrapper.write("\n")
-    #mywrapper.write("ifdh cp ./CutSummary.txt "+outdir+"/CutSummary_"+playlist+".txt")
+    mywrapper.write("\n")
+    mywrapper.write("ifdh cp ./CutSummary.txt "+outdir+"/CutSummary_"+playlist+".txt")
 
 def writeMigration(mywrapper,outdir,playlist,pdg,filename):
     mywrapper.write("./Migration_Tracker_anyMode . "+playlist+" "+pdg+" "+str(filename))
@@ -81,19 +80,20 @@ def writeSetups(mywrapper,basedir):
     mywrapper.write("cd "+topdir+"\n")
    # mywrapper.write("source /cvmfs/minerva.opensciencegrid.org/minerva/setup/setup_minerva_products.sh\n")
     # set environment variables
-    mywrapper.write("cd "+topdir+"\n")
 
-    mywrapper.write("source /cvmfs/larsoft.opensciencegrid.org/spack-packages/setup-env.sh\n")
-    mywrapper.write("spack load cmake@3.27.7\n")
-    mywrapper.write("spack load fife-utils@3.7.4\n")
-
-#    mywrapper.write("source /cvmfs/larsoft.opensciencegrid.org/spack-v0.22.0-fermi/setup-env.sh\n")
-#    mywrapper.write("spack load root@6.28.12 arch=linux-almalinux9-x86_64_v3\n")
-#    mywrapper.write("spack load gcc@12.2.0 arch=linux-almalinux9-x86_64_v3\n")
-
-    mywrapper.write("spack load root@6.28.12\n")
+    #mywrapper.write("source /cvmfs/larsoft.opensciencegrid.org/spack-packages/setup-env.sh\n")
+    #mywrapper.write("spack load fife-utils@3.7.4\n")
+    #mywrapper.write("spack cmake@3.27.7\n")
+    #mywrapper.write("spack root@6.28.12\n")    
     #mywrapper.write("spack load gcc@12.2.0\n")
-    mywrapper.write("export LD_LIBRARY_PATH=${ROOTSYS}/lib/root:${LD_LIBRARY_PATH}\n")
+
+
+    mywrapper.write("source /cvmfs/larsoft.opensciencegrid.org/spack-v0.22.0-fermi/setup-env.sh\n")
+    mywrapper.write("spack load root@6.28.12 arch=linux-almalinux9-x86_64_v3\n")
+    mywrapper.write("spack load cmake@3.27.9%gcc@11.4.1 arch=linux-almalinux9-x86_64_v3\n")
+    mywrapper.write("spack load ifdhc@2.8.0%gcc@12.2.0 arch=linux-almalinux9-x86_64_v3\n")
+    #mywrapper.write("spack load gcc@12.2.0 arch=linux-almalinux9-x86_64_v3\n")
+
 
     #Do I need these? setup.sh and setupGRID.sh are VERY similar scripts and I run them both... why? -carlos
     #mywrapper.write("cd "+topdir+"\n")
@@ -108,8 +108,8 @@ def writeSetups(mywrapper,basedir):
     # source bash script
     mywrapper.write("cd "+topdir+"opt/bin\n")
     mywrapper.write("source setupGRID.sh\n")
-
-    mywrapper.write("export PYTHONPATH=/exp/minerva/app/users/cpernas/MAT_AL9/MAT-MINERvA/python:/exp/minerva/app/users/cpernas/MAT_AL9/MAT-MINERvA/python/PlotUtils\n")
+    mywrapper.write("export LD_LIBRARY_PATH=${ROOTSYS}/lib/root:${LD_LIBRARY_PATH}\n")
+    #mywrapper.write("export PYTHONPATH=/exp/minerva/app/users/cpernas/MAT_AL9/MAT-MINERvA/python:/exp/minerva/app/users/cpernas/MAT_AL9/MAT-MINERvA/python/PlotUtils\n")
     #mywrapper.write("source /cvmfs/larsoft.opensciencegrid.org/spack-packages/opt/spack/linux-almalinux9-x86_64_v2/gcc-12.2.0/root-6.28.12-sfwfmqorvxttrxgfrfhoq5kplou2pddd/bin/thisroot.sh\n")
     # get to directory to run code
     mywrapper.write("cd "+topdir+"NuE_TKI\n")
@@ -264,6 +264,7 @@ cmd += "jobsub_submit --group minerva " #Group of experiment
 #cmd += "--OS sl7 " #Operating system #Not needed in SL7
 #cmd += "--singularity-image /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-sl7:latest "
 cmd += "--singularity-image /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-el9:latest "
+cmd += "-c has_avx2==True " #required architecture specification for grid node
 
 if opts.mail:
     cmd += "-M " #this option to make decide if you want the mail or not
