@@ -8,10 +8,11 @@
 
 #to make it not display the canvases as it draws and saves them, saves a bunch of time
 import sys
-sys.argv.append( '-b' )
 
 import ROOT
 from ROOT import PlotUtils
+sys.argv.append( '-b' )
+ROOT.gROOT.SetBatch(True)
 
 import sys
 from array import array
@@ -23,37 +24,35 @@ import ctypes
 drawData = True
 
 #names in the root file of the histograms we're interested in, just put the signal and it'll find the other bkgd categories from that
-signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco"]
+#signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco"]
+#signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco", "DeltaPt_selected_signal_reco","AlphaPt_selected_signal_reco"]
+#signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco", "DeltaPt_selected_signal_reco","AlphaPt_selected_signal_reco", "DeltaPtX_selected_signal_reco", "DeltaPtY_selected_signal_reco", "PhiPt_selected_signal_reco"]
+signalHistoNames = ["E_nu_MichelSB_selected_signal_reco", "E_avail_MichelSB_selected_signal_reco", "Lepton_Pt_MichelSB_selected_signal_reco", "E_lep_MichelSB_selected_signal_reco", "Theta_lep_MichelSB_selected_signal_reco", "RecoProtonP_MichelSB_selected_signal_reco", "RecoProtonTheta_MichelSB_selected_signal_reco", "DeltaPt_MichelSB_selected_signal_reco","AlphaPt_MichelSB_selected_signal_reco", "DeltaPtX_MichelSB_selected_signal_reco", "DeltaPtY_MichelSB_selected_signal_reco", "PhiPt_MichelSB_selected_signal_reco"]
+
+
+#signalHistoNames = ["DeltaPt_selected_signal_reco", "AlphaPt_selected_signal_reco"]
 #signalHistoNames = ["ProtonP_selected_signal_reco", "Theta_p_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_selected_signal_reco"]
 
-
-noProtonHistoNames=[] 
+NueCC0PiHistoNames=[] 
 otherNueCCHistoNames=[]
-nueelHistoNames=[]
-NCCohHistoNames=[]
-OtherNCHistoNames=[]
-CCnumuHistoNames=[]
+NCPi0HistoNames=[]
+CCnumuPi0HistoNames=[]
 otherBackgroundHistoNames=[]
 
 dataHistoNames=[]
 
 for i in signalHistoNames:
-    noProtonHistoNames.append(i.replace("selected_signal_reco", "background_NuECC_QE_Like_no_proton"))
+    NueCC0PiHistoNames.append(i.replace("selected_signal_reco", "background_NuECC_with_pions"))
     otherNueCCHistoNames.append(i.replace("selected_signal_reco", "background_Other_NueCC"))
-    nueelHistoNames.append(i.replace("selected_signal_reco", "background_nu___e_elastic"))
-    NCCohHistoNames.append(i.replace("selected_signal_reco", "background_NC_Coh"))
-    OtherNCHistoNames.append(i.replace("selected_signal_reco", "background_Other_NC"))
-    CCnumuHistoNames.append(i.replace("selected_signal_reco", "background_CC_Numu_pi0"))
+    NCPi0HistoNames.append(i.replace("selected_signal_reco", "background_NC_pi0"))
+    CCnumuPi0HistoNames.append(i.replace("selected_signal_reco", "background_CC_Numu_pi0"))
     otherBackgroundHistoNames.append(i.replace("selected_signal_reco", "background_Other"))
-
+    
     dataHistoNames.append(i.replace("selected_signal_reco", "data"))
+    #dataHistoNames.append(i.replace("MichelSB_selected_signal_reco", "selected_signal_reco"))
 
-#print signalHistoNames
-#print withoutProtonHistoNames
-#print nueelHistoNames
-#print NCCohHistoNames
-#print OtherNCHistoNames
-#print otherBackgroundHistoNames
+print(signalHistoNames)
 
 #if drawData:
 dataFile = ROOT.TFile.Open(sys.argv[1])
@@ -62,7 +61,7 @@ mcFile = ROOT.TFile.Open(sys.argv[2])
 plotter = PlotUtils.MnvPlotter()
 
 #plotter.ApplyStyle(PlotUtils.kCCNuPionIncStyle)
-plotter.legend_text_size = 0.02
+plotter.legend_text_size = 0.015
 if drawData:
     plotter.data_line_width = 2
     plotter.data_marker_size = 2
@@ -71,9 +70,8 @@ else:
     plotter.data_marker_size = 0
 
 #python to cpp nonsense idk
-mcColors = [4, 7, 6, 5, 3, 2, 9]
+mcColors = [4, 7, 6, 2, 5, 416]
 arr =(ctypes.c_int * len(mcColors))(*mcColors)
-
 
 
 mcPOT = mcFile.Get("POTUsed").GetVal()
@@ -89,76 +87,67 @@ else:
 
 for i in range(len(signalHistoNames)):
     signal = mcFile.Get(signalHistoNames[i])
-    noProton = mcFile.Get(noProtonHistoNames[i]) 
+    NueCC0Pi = mcFile.Get(NueCC0PiHistoNames[i]) 
     otherNueCC = mcFile.Get(otherNueCCHistoNames[i])
-    nueel = mcFile.Get(nueelHistoNames[i])
-    NCCoh = mcFile.Get(NCCohHistoNames[i])
-    OtherNC = mcFile.Get(OtherNCHistoNames[i])
-    CCnumu = mcFile.Get(CCnumuHistoNames[i])
+    NCPi0 = mcFile.Get(NCPi0HistoNames[i])
+    CCnumuPi0 = mcFile.Get(CCnumuPi0HistoNames[i])
     otherBkgd = mcFile.Get(otherBackgroundHistoNames[i])
 
+    print(signalHistoNames[i])
+
     signal.SetTitle('signal (nu_e QELike + proton)')
-    noProton.SetTitle('nu_e QELike no proton') 
+    NueCC0Pi.SetTitle('nu_e nonQE (has FS mesons)') 
     otherNueCC.SetTitle('Other nu_eCC') 
-    nueel.SetTitle('nu + e elastic')
-    NCCoh.SetTitle('NC Coh')
-    OtherNC.SetTitle('Other NC with pi0')
-    CCnumu.SetTitle('nu_mu CC with pi0')
+    NCPi0.SetTitle('NC with pi0')
+    CCnumuPi0.SetTitle('nu_mu CC with pi0')
     otherBkgd.SetTitle('other')
 
     #cause my dumb ass made em TH1D's instead of MnvH1D's
-    #signalWithProton = PlotUtils.MnvH1D(signalWithProton)
-    #withoutProton = PlotUtils.MnvH1D(withoutProton)
+    #signal = PlotUtils.MnvH1D(signal)
+    #NueCC0Pi = PlotUtils.MnvH1D(NueCC0Pi)
     #otherNueCC = PlotUtils.MnvH1D(otherNueCC)
-    #NCCoh = PlotUtils.MnvH1D(NCCoh)
-    #OtherNC = PlotUtils.MnvH1D(OtherNC)
+    #NCPi0 = PlotUtils.MnvH1D(NCPi0)
+    #CCnumuPi0 = PlotUtils.MnvH1D(CCnumuPi0)
     #otherBkgd = PlotUtils.MnvH1D(otherBkgd)
 
     array = ROOT.TObjArray()
     array.Add(otherBkgd)
-    array.Add(CCnumu)
-    array.Add(OtherNC)
-    array.Add(NCCoh)
-    array.Add(nueel)
+    array.Add(CCnumuPi0)
+    array.Add(NCPi0)
     array.Add(otherNueCC)
-    array.Add(noProton)
+    array.Add(NueCC0Pi)
     array.Add(signal)
     
     outName=signalHistoNames[i].replace("_selected_signal_reco", "")
-    canvas = ROOT.TCanvas( 'canvas', outName, 0, 0, 2000, 1600 )
+    canvas = ROOT.TCanvas( 'canvas', "test", 0, 0, 2000, 1600 )
 
     #to get variable name for the x axis
-    head, sep, tail = signalHistoNames[i].partition('_selected')
-
-
-    #if head == "E_avail" or head == "E_lep" or head == "E_nu":
-        #head+=" [GeV]"
-    #elif head == "Lepton_Pt":
-        #head+=" [GeV/c]"
-    #elif head == "Theta_lep":
-        #head+= " [deg]"
+    #head, sep, tail = signalHistoNames[i].partition('_selected')
 
     #some plotter options
-
     #arguments for stackedMC array are:
     #DrawStackedMC(mcHists, mcScale, legend position, base color, color offset, fill style, xaxislabel, yaxislabel)
     
     if drawData:
         data = dataFile.Get(dataHistoNames[i])
+        data = PlotUtils.MnvH1D(data)
+        #print(dataHistoNames[i])
         data.SetTitle('data')
-        plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 3001, head, "N events")
-        #normalization = "Normalized to 8.98e+19 data POT"
-        #plotter.AddPlotLabel(normalization, 0.2, 0.95, 0.03)
+        plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, signal.GetXaxis().GetTitle(), "N events")
+        #plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, head, "N events")
+        normalization = f"Normalized to {dataPOT:.3} data POT"
+        plotter.AddPlotLabel(normalization, 0.2, 0.95, 0.03)
 
     else:
         data = dataFile.Get(dataHistoNames[i])
+        #data = mcFile.Get(dataHistoNames[i])
         bins = data.GetXaxis()
+        #bins = signal.GetXaxis()
         for i in range(bins.GetNbins()):
             data.SetBinContent(i, 0)
         #data = ROOT.TH1D("test","test", signal.GetNbinsX(), 
         #plotter.DrawStackedMC(array, 1.0, "TR", 2, 1, 3001, head, "N events")
-        plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 3001, head, "N events")
-
+        plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, signal.GetXaxis().GetTitle(), "N events")
     
     outName = outName + ".png"
     canvas.SaveAs(outName)

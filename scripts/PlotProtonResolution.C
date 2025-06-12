@@ -9,9 +9,7 @@
 #include <vector>
 
 void PlotProtonResolution() {
-  //TString filename = "/exp/minerva/data/users/cpernas/TUPLE_MC_May_14_2025_me1M_all_cuts_with_Michel_sideband.root";
-  TString filename = "/exp/minerva/data/users/cpernas/TUPLE_MC_May_12_2025_NuEOnly_me1M_all_cuts_with_Michel_sideband.root";
-  //TString filename = "/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/TUPLE_MC_May_01_2025_me1B_all_cuts_with_Michel_sideband.root";
+  TString filename = "/exp/minerva/data/users/cpernas/NuE_TKI/MC_June_05_2025_full_FHC.root";
 
   TFile* file = TFile::Open(filename);
   if (!file || file->IsZombie()) {
