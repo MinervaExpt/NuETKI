@@ -25,17 +25,21 @@
 #ifndef BEN_CCINCLUSIVECUTS_H
 #define BEN_CCINCLUSIVECUTS_H
 
-#ifdef __GCCXML__
-#define override
-namespace std {
-  std::string to_string(double x) {
-    std::stringstream ss;
-    ss << x;
-    return ss.str();
+namespace utils {
+  std::string to_string_trimmed(double x, int precision = 2) {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(precision) << x;
+    std::string result = ss.str();
+
+    result.erase(result.find_last_not_of('0') + 1); //trims trailing zeroes
+
+    if (!result.empty() && result.back() == '.') { //trims dot if that's the last char
+        result.pop_back();
+    }
+
+    return result;
   }
 }
-#endif
-
 namespace reco
 {
   //============================================================================
@@ -124,25 +128,21 @@ namespace reco
     }
   };
 
-  //Modified Eavail Cut , which is Eavail minus sum of all tracked proton energies
+  //Modified Eavail Cut , which is Eavail minus sum of all candidate proton energies
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
   class ModifiedEavailable: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
     // Constructor                                                                                                                                                  
-    ModifiedEavailable(): PlotUtils::Cut<UNIVERSE, EVENT>("Modified Available energy < 2 GeV") {}
+    ModifiedEavailable(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Non Proton Available energy < " + utils::to_string_trimmed(max) + " GeV"), fMax(max) {}
 
     private:
     // THE cut function                                                                                                                                             
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      // Call a CVUniverse member function to make the cut                                                                                                   
-      //      std::cout <<"blob_recoil_E_tracker: "
-      //double Eavail = (univ.GetDouble("blob_recoil_E_tracker") + univ.GetDouble("blob_recoil_E_ecal")) * 1.17 - (0.008 * univ.GetDouble("prong_part_E") + 5);
-      const double ModEavail = univ.GetModifiedEavail();
-      return ModEavail < 2;
-      //return true;
+      return univ.GetModifiedEavail() < fMax;
     }
+    const double fMax;
   };
 
   //ElectronPt , gonna leave this one for later since it's not a branch straight up, it's some calculated quantity. double check ryan's to see how he does this cut
@@ -164,13 +164,14 @@ namespace reco
   class ElectronEnergy: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ElectronEnergy(): PlotUtils::Cut<UNIVERSE, EVENT>("Electron energy > 2.5 GeV") {}
+    ElectronEnergy(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Lepton energy > " + utils::to_string_trimmed(min) + " GeV"), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return univ.GetElectronEnergy() > 2.5;
+      return univ.GetElectronEnergy() > fMin;
     }
+    const double fMin;
   };
 
   //EleptonSin2Theta
@@ -178,7 +179,7 @@ namespace reco
   class EleptonSin2Theta: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    EleptonSin2Theta(): PlotUtils::Cut<UNIVERSE, EVENT>("E_lep * Theta_lep^2 > 0.003") {}
+    EleptonSin2Theta(): PlotUtils::Cut<UNIVERSE, EVENT>("E_lep * Theta_lep^2 > 0.003") {} //No sin involved at all??? double check ryan's...
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
@@ -303,7 +304,7 @@ namespace reco
   class Apothem: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    Apothem(const double apothem): PlotUtils::Cut<UNIVERSE, EVENT>(std::string("Apothem ") + std::to_string(apothem)), fApothem(apothem), fSlope(-1./sqrt(3.))//A regular hexagon has angles of 2*M_PI/3, so I can find this is 1/tan(M_PI/3.)
+    Apothem(const double apothem): PlotUtils::Cut<UNIVERSE, EVENT>(std::string("Apothem ") + utils::to_string_trimmed(apothem)), fApothem(apothem), fSlope(-1./sqrt(3.))//A regular hexagon has angles of 2*M_PI/3, so I can find this is 1/tan(M_PI/3.)
       {
       }
 
@@ -311,8 +312,8 @@ namespace reco
       bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
       {
         const ROOT::Math::XYZTVector vertex = univ.GetVertex();
-        return (fabs(vertex.y()) < fSlope*fabs(vertex.x()) + 2.*fApothem/sqrt(3.))
-               && (fabs(vertex.x()) < fApothem);
+        return (fabs(vertex.y()) < fSlope*fabs(vertex.x()) + 2.*fApothem/sqrt(3.)) && (fabs(vertex.x()) < fApothem);
+	//return univ.GetWithinFiducialApothem();
       }
 
       const double fApothem;
@@ -325,19 +326,14 @@ namespace reco
   class EMLikeTrackScore: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    EMLikeTrackScore(): PlotUtils::Cut<UNIVERSE, EVENT>("EM Shower candidate score") {}
+    EMLikeTrackScore(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("EM Shower candidate score > " + utils::to_string_trimmed(min)), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      /*      bool passesCut = false;
-      std::vector<double> prong_part_scores = univ.GetVecDouble("prong_part_score");
-      for (int i = 0; i < prong_part_scores.size(); i++){
-	if (prong_part_scores[i] > 0.7) passesCut = true;
-      }
-      */
-      return (univ.GetEMLikeShowerScore() > 0.7);
+      return (univ.GetEMLikeShowerScore() > fMin);
     }
+    const double fMin;
   };
 
   //DSCalVisE
@@ -345,13 +341,14 @@ namespace reco
   class DSCalVisE: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    DSCalVisE(): PlotUtils::Cut<UNIVERSE, EVENT>("DSCalVisE") {}
+    DSCalVisE(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("DSCalVisE Ratio < " + utils::to_string_trimmed(max)), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetDSCalVisE() <= 0.2);
+      return (univ.GetDSCalVisE() <= fMax);
     }
+    const double fMax;
   };
 
   //ODCalVisE
@@ -359,27 +356,30 @@ namespace reco
   class ODCalVisE: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ODCalVisE(): PlotUtils::Cut<UNIVERSE, EVENT>("ODCalVisE") {}
+    ODCalVisE(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("ODCalVisE Ratio < " + utils::to_string_trimmed(max)), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetODCalVisE() <= 0.05);
+      return (univ.GetODCalVisE() <= fMax);
     }
+    const double fMax;
   };
 
   //Afterpulsing
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
-    class Afterpulsing: public PlotUtils::Cut<UNIVERSE, EVENT>
+  class Afterpulsing: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    Afterpulsing(): PlotUtils::Cut<UNIVERSE, EVENT>("Afterpulsing") {}
+    Afterpulsing(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Afterpulsing"), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetFirstFireFraction() >= 0.25);
+      return (univ.GetFirstFireFraction() >= fMin);
     }
+
+    const double fMin;
   };
 
   //NonMIPClusterFraction
@@ -387,13 +387,14 @@ namespace reco
   class NonMIPClusterFraction: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    NonMIPClusterFraction(): PlotUtils::Cut<UNIVERSE, EVENT>("Prong Non MIP cluster fraction") {}
+    NonMIPClusterFraction(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Lepton Non MIP cluster fraction > " + utils::to_string_trimmed(min)), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetNonMIPClusFrac() > 0.7); //testing 0.7, was 0.4
+      return (univ.GetNonMIPClusFrac() > fMin); //testing 0.7, was 0.4
     }
+    const double fMin;
   };
 
   //NoVertexMismatch
@@ -411,20 +412,19 @@ namespace reco
   };
 
   //VertexTrackMultiplicity
-  //can probably tune this one... ?
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
   class VertexTrackMultiplicity: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    VertexTrackMultiplicity(): PlotUtils::Cut<UNIVERSE, EVENT>("Vertex Track multiplicity") {}
+    VertexTrackMultiplicity(const int min, const int max): PlotUtils::Cut<UNIVERSE, EVENT>("Vertex Track multiplicity: " + utils::to_string_trimmed(min) + " <= n <= " + utils::to_string_trimmed(max)), fMin(min), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      //return (univ.GetVertexTrackMultiplicity() > 2 && univ.GetVertexTrackMultiplicity() < 6);
-      return (univ.GetVertexTrackMultiplicity() <= 2); //was at < 6, testing <= 2 but this removes multi tracked proton events so idk...
-
+      return (univ.GetVertexTrackMultiplicity() >= fMin && univ.GetVertexTrackMultiplicity() <= fMax);
     }
+    const int fMin;
+    const int fMax;
   };
 
   //StartPointVertexMultiplicity
@@ -447,13 +447,14 @@ namespace reco
   class TransverseGapScore: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    TransverseGapScore(): PlotUtils::Cut<UNIVERSE, EVENT>("Transverse gap score > 15") {}
+    TransverseGapScore(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Lepton Transverse gap score > " + utils::to_string_trimmed(min)), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return univ.GetTransverseGapScore() > 15;
+      return univ.GetTransverseGapScore() > fMin;
     }
+    const double fMin;
   };
 
   //MeanFrontdEdX
@@ -461,13 +462,14 @@ namespace reco
   class MeanFrontdEdX: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    MeanFrontdEdX(): PlotUtils::Cut<UNIVERSE, EVENT>("Mean front shower dE/dX < 2.4 MeV/cm") {}
+    MeanFrontdEdX(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Mean front shower dE/dX < " + utils::to_string_trimmed(max) +" MeV/cm"), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return univ.GetMeanFrontdEdx() < 2.4;
+      return univ.GetMeanFrontdEdx() < fMax;
     }
+    const double fMax;
   };
 
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
@@ -498,12 +500,12 @@ namespace reco
     }
   };
 
-  //Michel electron cut, very rudimentary rn. 
+  //Michel electron cut, also used for michel sideband
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
-  class HasNoMichel: public PlotUtils::Cut<UNIVERSE, EVENT>
+  class MichelCut: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    HasNoMichel(): PlotUtils::Cut<UNIVERSE, EVENT>("improved_nmichel = 0") {}
+    MichelCut(): PlotUtils::Cut<UNIVERSE, EVENT>("Has No Michel") {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
@@ -512,33 +514,64 @@ namespace reco
     }
   };
 
-  //Michel electron cut flipped, for sideband
+  //Number of nonvtx isolated blobs cut
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
-  class HasMichel: public PlotUtils::Cut<UNIVERSE, EVENT>
+  class NIsoBlobs: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    HasMichel(): PlotUtils::Cut<UNIVERSE, EVENT>("improved_nmichel > 0") {}
+    NIsoBlobs(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("# of nonvtx iso blobs < " + utils::to_string_trimmed(max)), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return univ.GetImprovedNMichel()>0;
+      return univ.GetNIsoBlobs() < fMax;
     }
+    const double fMax;
   };
 
+  //Cut on total energy of nonvtx isolated blobs
+  template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
+  class IsoBlobEnergy: public PlotUtils::Cut<UNIVERSE, EVENT>
+  {
+    public:
+    IsoBlobEnergy(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Total energy of nonvtx iso blobs < " + utils::to_string_trimmed(max) + " MeV"), fMax(max) {}
+
+    private:
+    bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
+    {
+      return univ.GetIsoBlobsEnergy() < fMax;
+    }
+    const double fMax;
+  };
+
+  //Cut on any isolated blob more than some distance upstream of the neutrino vertex
+  template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
+  class UpstreamIsoBlob: public PlotUtils::Cut<UNIVERSE, EVENT>
+  {
+    public:
+    UpstreamIsoBlob(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("No Iso blobs more than " + utils::to_string_trimmed(-1*min) + " mm upstream of neutrino vertex"), fMin(min) {}
+
+    private:
+    bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
+    {
+      return univ.GetBlobZDiffToVtxZ() > fMin;
+    }
+    const double fMin;
+  };
 
   //Elastically Scattered Contained (ESC) proton cut
   template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
   class ESC: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ESC(): PlotUtils::Cut<UNIVERSE, EVENT>("ESC Proton Cut (chi2 < 10)") {}
+    ESC(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Hybrid Chi^2/ESC Proton Cut (chi2 < " + utils::to_string_trimmed(max) + ")"), fMax(max) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return univ.GetProtonESCNodeChi2() < 10; //please don't leave this hardcoded carlos
+      return univ.GetProtonESCNodeChi2() < fMax;
     }
+    const double fMax;
   };
 
 
