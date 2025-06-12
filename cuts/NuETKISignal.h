@@ -110,7 +110,7 @@ namespace truth
     class HasSignalProton: public PlotUtils::SignalConstraint<UNIVERSE>
     {
     public:
-    HasSignalProton(): PlotUtils::SignalConstraint<UNIVERSE>("HasSignalProton (450 < P_p < 1200 MeV/c, Theta_p < 70 deg)")
+    HasSignalProton(): PlotUtils::SignalConstraint<UNIVERSE>("HasSignalProton (450 < P_p < 1200 MeV/c, (Theta_p < 70 deg OR > 110 deg))")
       {
       }
 
