@@ -58,7 +58,7 @@ void Plot(PlotUtils::MnvH1D& hist, const std::string& stepName, const std::strin
 {
   TCanvas can(stepName.c_str());
   hist.GetCVHistoWithError().Clone()->Draw();
-  can.Print((prefix + "_" + stepName + ".png").c_str());
+  //can.Print((prefix + "_" + stepName + ".png").c_str());
 
   //Uncertainty summary
   PlotUtils::MnvPlotter plotter;
@@ -66,10 +66,10 @@ void Plot(PlotUtils::MnvH1D& hist, const std::string& stepName, const std::strin
   plotter.axis_maximum = 0.4;
 
   plotter.DrawErrorSummary(&hist);
-  can.Print((prefix + "_" + stepName + "_uncertaintySummary.png").c_str());
+  //can.Print((prefix + "_" + stepName + "_uncertaintySummary.png").c_str());
 
   plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Other");
-  can.Print((prefix + "_" + stepName + "_otherUncertainties.png").c_str());
+  //can.Print((prefix + "_" + stepName + "_otherUncertainties.png").c_str());
 }
 
 //Unfolding function from Aaron Bercelle
@@ -167,6 +167,7 @@ int main(const int argc, const char** argv)
   {
     const std::string keyName = key->GetName();
     const size_t endOfPrefix = keyName.find("_data");
+    if (keyName.find("MichelSB") != std::string::npos){ continue; }
     if(endOfPrefix != std::string::npos) crossSectionPrefixes.push_back(keyName.substr(0, endOfPrefix));
   }
 
@@ -177,9 +178,12 @@ int main(const int argc, const char** argv)
   {
     try
     {
+      std::cout << "Carlos test, trying to extract " << prefix << std::endl;
       auto flux = util::GetIngredient<PlotUtils::MnvH1D>(*mcFile, "reweightedflux_integrated", prefix);
       auto folded = util::GetIngredient<PlotUtils::MnvH1D>(*dataFile, "data", prefix);
+      std::cout << "CARLOS TEST 0" << std::endl;
       Plot(*folded, "data", prefix);
+      std::cout << "CARLOS TEST 1" << std::endl;
       auto migration = util::GetIngredient<PlotUtils::MnvH2D>(*mcFile, "migration", prefix);
       auto effNum = util::GetIngredient<PlotUtils::MnvH1D>(*mcFile, "efficiency_numerator", prefix);
       auto effDenom = util::GetIngredient<PlotUtils::MnvH1D>(*mcFile, "efficiency_denominator", prefix);
@@ -210,7 +214,7 @@ int main(const int argc, const char** argv)
       folded->AddMissingErrorBandsAndFillWithCV(*migration);
 
       //Basing my unfolding procedure for a differential cross section on Alex's MINERvA 101 talk at https://minerva-docdb.fnal.gov/cgi-bin/private/RetrieveFile?docid=27438&filename=whatsACrossSection.pdf&version=1
-
+      std::cout << "CARLOS TEST 2" << std::endl;
       //TODO: Remove these debugging plots when done
       auto toSubtract = std::accumulate(std::next(backgrounds.begin()), backgrounds.end(), (*backgrounds.begin())->Clone(),
                                         [](auto sum, const auto hist)
@@ -219,7 +223,7 @@ int main(const int argc, const char** argv)
                                           return sum;
                                         });
       Plot(*toSubtract, "BackgroundSum", prefix);
-
+      std::cout << "CARLOS TEST 3" << std::endl;
       auto bkgSubtracted = std::accumulate(backgrounds.begin(), backgrounds.end(), folded->Clone(),
                                            [mcPOT, dataPOT](auto sum, const auto hist)
                                            {
@@ -228,45 +232,52 @@ int main(const int argc, const char** argv)
                                              return sum;
                                            });
       Plot(*bkgSubtracted, "backgroundSubtracted", prefix);
-
+      std::cout << "CARLOS TEST 4" << std::endl;
       auto outFile = TFile::Open((prefix + "_crossSection.root").c_str(), "CREATE");
       if(!outFile)
       {
         std::cerr << "Could not create a file called " << prefix + "_crossSection.root" << ".  Does it already exist?\n";
         return 5;
       }
-
+      std::cout << "CARLOS TEST 5" << std::endl;
       bkgSubtracted->Write("backgroundSubtracted");
 
       //d'Aogstini unfolding
       auto unfolded = UnfoldHist(bkgSubtracted, migration, nIterations);
+      std::cout << "CARLOS TEST 6" << std::endl;
       if(!unfolded) throw std::runtime_error(std::string("Failed to unfold ") + folded->GetName() + " using " + migration->GetName());
       Plot(*unfolded, "unfolded", prefix);
       unfolded->Clone()->Write("unfolded"); //TODO: Seg fault first appears when I uncomment this line
       std::cout << "Survived writing the unfolded histogram.\n" << std::flush; //This is evidence that the problem is on the final file Write() and not unfolded->Clone()->Write().
 
       effNum->Divide(effNum, effDenom); //Only the 2 parameter version of MnvH1D::Divide()
+      std::cout << "CARLOS TEST 7" << std::endl;
                                         //handles systematics correctly.
       Plot(*effNum, "efficiency", prefix);
 
       unfolded->Divide(unfolded, effNum);
+      std::cout << "CARLOS TEST 8" << std::endl;
       Plot(*unfolded, "efficiencyCorrected", prefix);
 
       auto crossSection = normalize(unfolded, flux, nNucleons->GetVal(), dataPOT);
+      std::cout << "CARLOS TEST 9" << std::endl;
       Plot(*crossSection, "crossSection", prefix);
       crossSection->Clone()->Write("crossSection");
 
       //Write a "simulated cross section" to compare to the data I just extracted.
       //If this analysis passed its closure test, this should be the same cross section as
       //what GENIEXSecExtract would produce.
+      std::cout << "CARLOS TEST 10" << std::endl;
       normalize(simEventRate, flux, nNucleons->GetVal(), mcPOT);
       
       Plot(*simEventRate, "simulatedCrossSection", prefix);
       simEventRate->Write("simulatedCrossSection");
+      std::cout << "CARLOS TEST 11" << std::endl;
+
     }
     catch(const std::runtime_error& e)
     {
-      std::cerr << "Failed to extra a cross section for prefix " << prefix << ": " << e.what() << "\n";
+      std::cerr << "Failed to extract a cross section for prefix " << prefix << ": " << e.what() << "\n";
       return 4;
     }
   }
