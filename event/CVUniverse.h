@@ -62,7 +62,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 
   static constexpr double pi = 3.141592653589793;
 
-  //what is this actual number supposed to be?
+  //what is this actual number supposed to be? I'm using a hardcoded value of 3.3 right now
   //static constexpr double beam_tilt = 3.2627; //beam tilt downward with respect to z axis, in degrees
 
   // ========================================================================
@@ -101,6 +101,9 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //Electron kinetic energy (T) in GeV
+  //Actually I think this is wrong, the E that comes from prong_part_E doesn't have electron mass added...
+  //probably cause electron rest mass is basically negligible (0.5MeV, or 0.0005 GeV, or less than the average hit energy...)
+  //But either way, makes no sense to subtract it back off if it was never added in the first place
   double GetElectronT() const{
     double leptonT = GetElectronEnergy() - M_e/1000.; //E_e from the function is in GeV, M_e is in MeV
     if (leptonT > 0){
@@ -111,6 +114,9 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
   
   //Electron momentum in GeV
+  //And actually same story as above here, this doesn't really make sense. It should just be prong_part_E straight up
+  //which again makes sense, for relativistic particles E = p (pretend its squiggly)
+  //Doesn't really hurt to do it, but the value is gonna be the same basically.
   double GetElectronP() const{
     double M_lep_sqr = pow(M_e, 2) / pow(10, 6);  //over 10^6 to convert to GeV^2
     double leptonP = pow(GetElectronEnergy(), 2)-M_lep_sqr;
@@ -188,6 +194,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 
     return primary_proton_energy + sum_secondary_proton_energy;
   }
+  
   //MasterAnaDev_proton_P_fromdEdx, in GeV
   double GetProtonP() const {
     double protonP = GetDouble("MasterAnaDev_proton_P_fromdEdx");
@@ -212,12 +219,13 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //Hadronic available energy (no neutrons) in GeV
   double GetEavail() const {
     double E = GetDouble("blob_recoil_E_tracker") + GetDouble("blob_recoil_E_ecal");
-    double Eavail = (E * 1.17 - ((0.008 * GetVecElem("prong_part_E", 0, 3)) + 5))/1000.;
+    //Check this correction by the electron energy... This is not what Hang does, and in fact it's different for data/MC
+    double Eavail = (E * 1.17 - ((0.008 * GetVecElem("prong_part_E", 0, 3)) + 5))/1000.; 
     //std::cout << "Reco Eavail: " << Eavail << std::endl;
     return Eavail;
   }
 
-  //This is the same e-avail as above, but with all tracked proton calibrated energy subtracted off (
+  //This is the same e-avail as above, but with all tracked proton calibrated kinetic energy subtracted off (
   //this is a completely reco variable by the way, in case I get lost lol
   double GetModifiedEavail() const {
     double Eavail = GetEavail()*1000.; //because my function returns eavail in GeV and all of these branches are in MeV :)))))
@@ -227,10 +235,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     if (primary_proton_energy < -1) { primary_proton_energy= 0; } //branch is set to -9999 by default
 
     //very few events have tracked secondary protons honestly... about 10% of my overall sample, fewer for signal
-
-    //couple subtleties about this...
-    // 1. make sure this is never -9999
-    // 2. this is just kinetic energy, I want total right??? Because E_nu = E_e + E_avail, so it must include the rest mass right? same for above tbh, i think calib energy is just kinetic...
     double sum_secondary_proton_energy = 0;
     std::vector<double> secondary_protons = GetVecDouble("MasterAnaDev_sec_protons_T_fromCalo");
     for (int i = 0; i < secondary_protons.size(); i++){
@@ -301,34 +305,51 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return deltaPt_vec;
   }
   
-  //delta Pt (magnitude of the vector), in GeV
+  //delta pT (magnitude of the vector), in GeV
   double GetDeltaPt() const{
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
     //std::cout << "delta Pt: " << sqrt(deltaPt_vec.Mag2()) << std::endl;
     return sqrt(deltaPt_vec.Mag2()); 
   }
 
-  //GeV  (THIS IS WRONG, DOUBLE CHECK THE DEFINITION)
+  //Magnitude of the component of delta pT orthogonal to electron pT (GeV)
   double GetDeltaPtX() const{
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
-    //std::cout << "delta pT X: " << deltaPt_vec.X() << std::endl;
-    return deltaPt_vec.X(); 
+
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.));
+
+    //Rotate both back to beam frame
+    ROOT::Math::XYZVector electron_pt_in_beam_frame = r(electronPt_vec);
+    ROOT::Math::XYZVector delta_pt_in_beam_frame = r(deltaPt_vec);
+
+    //expression for the scalar rejection, aka perpendicular dot product
+    double num = delta_pt_in_beam_frame.Y()*electron_pt_in_beam_frame.X() - delta_pt_in_beam_frame.X()*electron_pt_in_beam_frame.Y();
+    double denom = sqrt(electron_pt_in_beam_frame.Mag2());
+    return num/denom;
   }
 
-  //GeV (THIS IS WRONG, DOUBLE CHECK THE DEFINITION)
+  //Magnitude of the component of  delta pT parallel to electron pT (GeV)
   double GetDeltaPtY() const{
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
-    //std::cout << "delta pT Y: " << deltaPt_vec.Y() << std::endl;
-    return deltaPt_vec.Y(); 
+
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.));
+
+    //Rotate both back to beam frame
+    ROOT::Math::XYZVector electron_pt_in_beam_frame = r(electronPt_vec);
+    ROOT::Math::XYZVector delta_pt_in_beam_frame = r(deltaPt_vec);
+
+    //expression for the scalar projection
+    double num = delta_pt_in_beam_frame.Dot(electron_pt_in_beam_frame);
+    double denom = sqrt(electron_pt_in_beam_frame.Mag2());
+    return num/denom;
   }
   
   //Alpha_t, the TKI boosting angle. it's the angle between inverted electron pT and delta pT
   double GetAlphaT() const{
     ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
-
-    //std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
-    //std::cout << "delta p_t vector:    ( " << deltaPt_vec.X() << ", " << deltaPt_vec.Y() << ", " << deltaPt_vec.Z() << " )" << std::endl;
 
     //angle between the two vectors
     double numerator = ((-1*electronPt_vec).Dot(deltaPt_vec));
@@ -344,9 +365,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     ROOT::Math::XYZVector electronPt_vec = GetElectronPtVec();
     ROOT::Math::XYZVector protonPt_vec = GetProtonPtVec();
 
-    //std::cout << "electron p_t vector: ( " << electronPt_vec.X() << ", " << electronPt_vec.Y() << ", " << electronPt_vec.Z() << " )" << std::endl;
-    //std::cout << "proton p_t vector:   ( " << protonPt_vec.X() << ", " << protonPt_vec.Y() << ", " << protonPt_vec.Z() << " )" << std::endl;
-    
     //angle between the two vectors 
     double numerator = ((-1*electronPt_vec).Dot(protonPt_vec));
     double denominator = ( sqrt(electronPt_vec.Mag2()) * sqrt(protonPt_vec.Mag2()) );
@@ -356,7 +374,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return phi * 180/pi;  //return in degrees cause that's how I've set up my bins for now
   }
   
-  //Delta P parallel, or the sum of longitudinal momentum of proton & electron.
+  //Delta P parallel, or the sum of longitudinal (wrt beam direction) momentum of proton & electron.
   //Because this is 1D only can just sum the two values I already have
   //Don't need to mess about with vectors, and those functions already return neg & pos w.r.t. beam direction
   double GetDeltaPParallel() const{
@@ -501,36 +519,22 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetInt("improved_nmichel");
   }
   
-  //MASSIVE TO DO: I HAVE NO IDEA WHAT THIS DOES AND COPIED IT AS IS FROM DAN
-  //FIGURE OUT EXACTLY WHAT IT DOES AND VERIFY THAT IT WORKS AS INTENDED IN MY SELECTION
-  double GetProtonESCNodeChi2() const {
-    //I really have absolutely no idea where these hardcoded means and sigmas come from, these were in Dan's CCQENu cuts...
-    //std::vector<double> means;
-    //means.push_back(31.302);
-    //means.push_back(11.418);
-    //means.push_back(9.769);
-    //means.push_back(8.675);
-    //means.push_back(7.949);
-    //std::vector<double> sigmas;
-    //sigmas.push_back(8.997);
-    //sigmas.push_back(3.075);
-    //sigmas.push_back(2.554);
-    //sigmas.push_back(2.484);
-    //sigmas.push_back(2.232);
-    double z = GetProtonEndZ();
-    if (z < -1){ return 999; } //if there's no reco proton, this cut fails
-    //actually this is already handled below... if there's no reco proton, n_nodes is 0 and it fails
-    
-    //Where on earth are these numbers from
-    //I found it, docdb 27170 from Dan
-    double means[5] = {31.302, 11.418, 9.769, 8.675, 7.949};
-    double sigmas[5] = {8.997, 3.075, 2.554, 2.484, 2.232};
-    
+  //Calculates a chi^2 for proton end dE/dX if more than 5 nodes on proton track
+  //Otherwise uses the original ESC method of checking node by node for last 5 nodes, and sets to an arbitrary, high chi^2 (75) if it fails any node cut
+  double GetProtonESCNodeChi2() const {        
     double nodeEnergyVal = 0;
     double chi2=0;
     int n_nodes = GetInt("MasterAnaDev_proton_nodes_nodesNormE_sz");
     std::vector<double> nodesNormE = GetVecDouble("MasterAnaDev_proton_nodes_nodesNormE");
-    if(n_nodes>5){
+
+    if(n_nodes>5){ //Has more than 5 nodes, so use the chi^2 method
+      double means[5] = {31.302, 11.418, 9.769, 8.675, 7.949};
+      double sigmas[5] = {8.997, 3.075, 2.554, 2.484, 2.232};
+      //These numbers represent a proton end track dE/dX fit for stopping protons, against which we calculate our chi^2 for the candidate proton track
+      //If chi^2 is high, the fit doesn't accurately represent the dE/dX profile of the track in question
+      //Which means it's probably not a stopping proton, rescattered inelastically or escaped or something
+      //These values come from docdb 27170 from Dan
+
       for(int i=0;i<n_nodes;i++){
 	if(i==6) break;
 	if(i==0) nodeEnergyVal+=nodesNormE[0];
@@ -541,25 +545,23 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	}
       }
     }
-    
-    //Bit hacky cause in Dan's original CCQENu this was a separate function, but I don't think I'll ever need it anywhere else
-    else{
+    else{ //Has 5 or fewer nodes, so use ESC node method
       bool pass = true;
 
-      //Cut Values based on 22302 (carlos - i assume this is a docdb number? -> yes)
-      //Node 0-1
-      //Node 2
-      //Node 3
-      //Node 4
-      //Node 5
-      //Node 6
-      
-      double cutval1 = 19;
-      double cutval2 = 10;
-      double cutval3 = 9;
-      double cutval4 = 8;
-      double cutval5 = 5;
-      
+      //Cut Values based on docdb 22302, where node 0 is the final node on the track and so on
+      //These are horrible for my selection based on resolution plots, NEED TO ADJUST !
+      //double cutval1 = 19; //Node 0+1
+      //double cutval2 = 10; //Node 2
+      //double cutval3 = 9;  //Node 3
+      //double cutval4 = 8;  //Node 4
+      //double cutval5 = 5;  //Node 5
+
+      double cutval1 = 19; //Node 0+1
+      double cutval2 = 1; //Node 2
+      double cutval3 = 1;  //Node 3
+      double cutval4 = 1;  //Node 4
+      double cutval5 = 1;  //Node 5
+
       if(n_nodes==0) { pass = false; }///no nodes
       if(n_nodes>1) {
 	if(nodesNormE[0]+nodesNormE[1] < cutval1) { pass = false; }
@@ -577,13 +579,33 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	if(nodesNormE[5] < cutval5){ pass = false; }
       }
       //survived loops?
-      if(pass) chi2=0;
-      else chi2=75;
+      if(pass) { chi2=0; } //doesn't really matter, we just want to make sure it passes the cut
+      else { chi2=75; } //Arbitrary, large value above the cut threshold
     }
     //std::cout << "chi2 = " << chi2 << std::endl;
     return chi2;
   }
 
+  //Difference between furthest upstream blob start point z and vertex z (in mm)
+  double GetBlobZDiffToVtxZ() const {
+    std::vector<double> blobs_start_z = GetVecDouble("nonvtx_iso_blobs_start_position_z_in_prong");
+    int n_blobs = GetInt("nonvtx_iso_blobs_start_position_z_in_prong_sz");
+    std::vector<double> vtx = GetVecDouble("vtx");
+
+    //find the furthest upstream blob start z, then calc the difference between that and vertex Z
+    double minBlobStartZ = 100000; // some ridiculously large number
+    if (n_blobs > 0){
+      for (int i=0; i < n_blobs; i++){
+	if (blobs_start_z[i] < minBlobStartZ){
+	  minBlobStartZ = blobs_start_z[i];
+	}
+      }
+      return minBlobStartZ - vtx[2];
+    }
+    else{ return 0; }
+  }
+
+  
   //This is E_lep * theta_lep^2, Ryan uses it for a cut but I don't at the moment
   double GetETheta() const {
     //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
@@ -591,7 +613,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //std::cout << "E_lep*theta^2:      " << etheta << std::endl;
     return etheta;
   }
-
+  
   //But he calls it (and it seems like it really should be) E_lep * sin^2(theta), so that's what im gonna calculate here...
   double GetELepSin2Theta() const {
     //double etheta = GetElectronEnergy() * pow(std::sin(GetElectronTheta()), 2);
@@ -676,6 +698,17 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   int GetExitsBack() const {
     return GetInt("HasNoBackExitingTracks");
   }
+
+  //Number of isolated blob prongs
+  int GetNIsoBlobs() const {
+    return GetInt("nonvtx_iso_blobs_energy_in_prong_sz");
+  }
+
+  //Summed energy of all isolated blob prongs
+  double GetIsoBlobsEnergy() const {
+    return GetDouble("nonvtx_iso_blobs_energy");
+  }
+
   
   ROOT::Math::XYZTVector GetVertex() const {
     ROOT::Math::XYZTVector result;
@@ -732,7 +765,8 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i)); 
 	ROOT::Math::RotationX r(-3.3 * (pi / 180.));
 	double protonTheta = (r(p)).Theta()*(180/pi); //in degrees
-	if (protonP>450 && protonP<1200 && protonTheta<70){
+	//if (protonP>450 && protonP<1200 && protonTheta<70){
+	if (protonP>450 && protonP<1200 && (protonTheta<70 || protonTheta>110)){ //Testing allowing backwards protons??
 	  highestEnergy = energies[i];
 	  index = i;
 	}
