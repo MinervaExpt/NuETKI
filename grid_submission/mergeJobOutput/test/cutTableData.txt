@@ -1,0 +1,2 @@
+/pnfs/minerva/persistent/users/cpernas/me1L/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1O/CutSummary_Data.txt

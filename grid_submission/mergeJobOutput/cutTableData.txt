@@ -1,0 +1,12 @@
+/pnfs/minerva/persistent/users/cpernas/me1A/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1B/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1C/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1D/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1E/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1F/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1G/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1L/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1M/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1N/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1O/CutSummary_Data.txt
+/pnfs/minerva/persistent/users/cpernas/me1P/CutSummary_Data.txt

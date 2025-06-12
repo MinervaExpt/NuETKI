@@ -1,0 +1,12 @@
+/pnfs/minerva/persistent/users/cpernas/me1A/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1B/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1C/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1D/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1E/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1F/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1G/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1L/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1M/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1N/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1O/POT.txt
+/pnfs/minerva/persistent/users/cpernas/me1P/POT.txt

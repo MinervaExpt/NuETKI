@@ -1,0 +1,12 @@
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1A --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1A
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1B --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1B
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1C --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1C
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1D --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1D
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1E --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1E
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1F --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1F
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1G --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1G
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1L --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1L
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1M --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1M
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1N --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1N
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1O --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1O
+python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1P --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/me1P

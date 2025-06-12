@@ -1,0 +1,2 @@
+/pnfs/minerva/persistent/users/cpernas/me1L/Data_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1O/Data_June_05_2025.root

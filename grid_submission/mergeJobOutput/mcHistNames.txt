@@ -1,0 +1,12 @@
+/pnfs/minerva/persistent/users/cpernas/me1A/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1B/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1C/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1D/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1E/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1F/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1G/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1L/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1M/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1N/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1O/MC_June_05_2025.root
+/pnfs/minerva/persistent/users/cpernas/me1P/MC_June_05_2025.root
