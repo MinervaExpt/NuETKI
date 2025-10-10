@@ -10,7 +10,7 @@ x = datetime.datetime(2025, 6, 5)
 outFileName = "CutSummary_" + x.strftime("%b_%d_%Y") + ".txt"
 
 if sum_POT:
-    with open("POT_configs.txt") as f:
+    with open("cutTables.txt") as f:
         file_paths = [line.strip() for line in f if line.strip()]
 
     n_dataFiles = 0
@@ -39,7 +39,7 @@ if sum_POT:
  
 
 if sum_mc_table:
-    with open("cutTableMC.txt") as f:
+    with open("cutTables.txt") as f:
         file_paths = [line.strip() for line in f if line.strip()]
 
     n_cuts = None
@@ -96,7 +96,7 @@ if sum_mc_table:
         
 if sum_data_table:
     # Read list of cut table file paths
-    with open("cutTableData.txt") as f:
+    with open("cutTables.txt") as f:
         file_paths = [line.strip() for line in f if line.strip()]
 
     n_cuts = None

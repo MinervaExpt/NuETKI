@@ -1,0 +1,12 @@
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1A/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1B/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1C/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1D/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1E/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1F/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1G/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1L/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1M/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1N/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1O/CutSummary.txt
+/pnfs/minerva/persistent/users/cpernas/Sep_23_2_sideband_fit_test_with_syst/me1P/CutSummary.txt
