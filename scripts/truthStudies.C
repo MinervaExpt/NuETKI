@@ -1,182 +1,207 @@
+#include "TROOT.h"
+#include "TGraphErrors.h"
+#include "TF1.h"
+#include "TLegend.h"
+#include "TArrow.h"
+
+#include "TH1D.h"
 #include "TFile.h"
-#include "TH1F.h"
-#include "TBranch.h"
-#include "TLeaf.h"
-#include "TChain.h"
-#include "TTreeReader.h"
-#include "TTreeReaderValue.h"
+#include "TKey.h"
+#include "TParameter.h"
+#include "TCanvas.h"
 
+
+//c++ includes
+#include <iostream>
+#include <string.h>
+#include <bits/stdc++.h>
 #include <vector>
+#include <array>
+using namespace std;
+#include <cmath>
 
-double CalcApothem(double xval, double yval) {
-  double x=abs(xval);
-  double y=abs(yval);
-  if ( x == 0 or y/x > 1/sqrt(3)) {
-    return (y+x/sqrt(3))/2*sqrt(3);
-  }
-  else {
-    return x;
-  }
+namespace PlotUtils
+{
+  class MnvH1D;
 }
+
+//Using Arrays
+
+bool hasFSProton(int PDGs[183], int nFS_part) {
+  bool hasProton = false;
+  for (int i = 0; i < nFS_part; i++) {
+    int part = abs(PDGs[i]);
+    if (part==2212){
+      hasProton=true;
+    }
+  }
+  return hasProton;
+}
+bool hasTrackableFSProton(int PDGs[183], double FS_energies[183], int nFS_part) {
+  bool hasTrackableProton = false;
+  for (int i = 0; i < nFS_part; i++) {
+    int part = abs(PDGs[i]);
+    if (part==2212 && FS_energies[i] > 1038 ){
+      hasTrackableProton=true;
+    }
+  }
+  return hasTrackableProton;
+}
+
 
 void truthStudies() {
-
   
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110030_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110031_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110032_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110033_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110034_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110035_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110036_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110037_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110038_Playlist.root");
-  //TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110039_Playlist.root");
-  TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110040_Playlist.root");
-
+  //TChain tree("MasterAnaDev");
+  //tree.Add("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110030_Playlist.root");
+  ///pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110030_Playlist.root
+  
+  TFile * myFile = new TFile("/pnfs/minerva/persistent/DataPreservation/p4/FullDetector/Merged_mc_ana_me1A_DualVertex_p4/MasterAnaDev_mc_AnaTuple_run00110030_Playlist.root");
   TTree *tree = (TTree*)myFile->Get("MasterAnaDev");
+
+  tree->SetBranchStatus("*", false);
   
-  //TTree *tree = (TTree*)myFile->Get("MasterAnaDev");
-  TTreeReader myReader(tree);
+  //Truth quantities
+  tree->SetBranchStatus("mc_incoming", true);
+  tree->SetBranchStatus("mc_nFSPart", true);
+  tree->SetBranchStatus("mc_FSPartPDG", true);
+  tree->SetBranchStatus("mc_FSPartE", true);
+  tree->SetBranchStatus("mc_run", true);
+  tree->SetBranchStatus("mc_subrun", true);
+  tree->SetBranchStatus("mc_nthEvtInFile", true);
 
-  //True variables
-  TTreeReaderValue<Int_t> mc_incoming(myReader, "mc_incoming");
-  TTreeReaderValue<Int_t> run(myReader, "mc_run");
-  TTreeReaderValue<Int_t> subrun(myReader, "mc_subrun");
-  TTreeReaderValue<Int_t> nthEvtInFile(myReader, "mc_nthEvtInFile");
-  TTreeReaderArray<Int_t> FS_PDG(myReader, "mc_FSPartPDG");
-  TTreeReaderArray<Double_t> FS_E(myReader, "mc_FSPartE");
+  //MAT reco cuts for reference
+  /*  
+  preCuts.emplace_back(new reco::HasTracks<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::NoVertexMismatch<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>());
 
-  //Reco Variables
-  TTreeReaderArray<Double_t> vtx(myReader, "vtx");
-  TTreeReaderValue<Int_t> nProngs(myReader, "n_prongs");
-  TTreeReaderValue<Int_t> noBackExitingTracks(myReader, "HasNoBackExitingTracks");
-  TTreeReaderValue<Int_t> noVertexMismatch(myReader, "HasNoVertexMismatch");
-  TTreeReaderValue<Int_t> trackMultiplicity(myReader, "VertexTrackMultiplicity");
-  TTreeReaderValue<Int_t> vertexMultiplicity(myReader, "StartPointVertexMultiplicity");
-  TTreeReaderValue<Double_t> blobRecoilTracker(myReader, "blob_recoil_E_tracker");
-  TTreeReaderValue<Double_t> blobRecoilECAL(myReader, "blob_recoil_E_ecal");
-  TTreeReaderValue<Int_t> tDead(myReader, "phys_n_dead_discr_pair_upstream_prim_track_proj");
-  TTreeReaderArray<Double_t> showerScore(myReader, "prong_part_score");
-  TTreeReaderArray<Double_t> firstFireFraction(myReader, "prong_FirstFireFraction");
-  TTreeReaderArray<Double_t> HCALVisE(myReader, "prong_HCALVisE");
-  TTreeReaderArray<Double_t> ECALVisE(myReader, "prong_ECALVisE");
-  TTreeReaderArray<Double_t> ODVisE(myReader, "prong_ODVisE");
-  TTreeReaderArray<Double_t> sideECALVisE(myReader, "prong_SideECALVisE");
-  TTreeReaderArray<Double_t> meanFrontDEDX(myReader, "prong_dEdXMeanFrontTracker");
-  TTreeReaderArray<Double_t> transverseGapScore(myReader, "prong_TransverseGapScore");
-  TTreeReaderArray<Double_t> nonMIPClusFrac(myReader, "prong_NonMIPClusFrac");
-  TTreeReaderValue<Double_t> MAD_proton_endPointZ(myReader, "MasterAnaDev_proton_endPointZ");
-  TTreeReaderArray<Int_t> prong_part_PID(myReader, "prong_part_pid");
+  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, MichelEvent>(1, "Deadtime"));
 
-  //This is kinda hacky, but by doing it this way I'm basically doing a manual SetBranchAddress, and also don't have to load the whole tree (just the 1 branch)
-  //kinda the same way you only load a subset of branches by setting branch status on & off, but not sure if that'll mess w my TTReeReader and this works so 
-  // ¯\_(ツ)_/¯
-  TBranch* prongE = tree->GetBranch("prong_part_E");
-  prongE->GetEntry(0); //next line complains abt null pointer if I don't load an entry, this gets overwritten @ beginning of loop anyways
-  vector<vector<double>>* prongEarr = (vector<vector<double>>*)(prongE->GetLeaf("prong_part_E")->GetValuePointer());
+  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, MichelEvent>());
+
+  preCuts.emplace_back(new reco::ZRange<CVUniverse, MichelEvent>("Tracker", minZ, maxZ));
+  preCuts.emplace_back(new reco::Apothem<CVUniverse, MichelEvent>(apothem));
+  preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
+
+  preCuts.emplace_back(new reco::ProtonEnd<CVUniverse, MichelEvent>());
+  */
+
+  //Reco branches
+  tree->SetBranchStatus("MasterAnaDev_proton_endPointZ", true);
+  tree->SetBranchStatus("HasNoBackExitingTracks", true);
+  tree->SetBranchStatus("prong_part_score", true);
+  tree->SetBranchStatus("prong_HCALVisE", true);
+  tree->SetBranchStatus("prong_ECALVisE", true);
+  tree->SetBranchStatus("prong_ODVisE", true);
+  tree->SetBranchStatus("prong_SideECALVisE", true);
+  tree->SetBranchStatus("HasNoVertexMismatch", true);
+  tree->SetBranchStatus("VertexTrackMultiplicity", true);
+  tree->SetBranchStatus("prong_dEdXMeanFrontTracker", true);
+  tree->SetBranchStatus("prong_TransverseGapScore", true);
+  //tree->SetBranchStatus("VertexTrackMultiplicity", true);
+  //tree->SetBranchStatus("VertexTrackMultiplicity", true);
+  //tree->SetBranchStatus("VertexTrackMultiplicity", true);
+  //tree->SetBranchStatus("VertexTrackMultiplicity", true);
+
+
+  int inc, run, subrun, gate, nFS_part, noBackExitingTracks,noVertexMismatch,vertexTrackMultiplicity;
+  double recoProton, HCalVisE, ECalVisE,ODVisE,SideCalVisE,frontdEdX,transverseGapScore;
   
-  //TFile* outFile = new TFile("/minerva/data/users/cpernas/NuE_TKI/NuE_Selection_ONLY.root","recreate");
-  //TTree *newTree = tree->CloneTree(0);
+  Int_t FS_PDG[183];
+  Double_t FS_E[183];
 
-  int counter = 0;
-  int nTrueProtonsBeforeReco = 0;
-  int nRecoProtons = 0;
-  int nTrueProtonsAfterReco = 0;
-  
-  int numuRecoProton = 0;
-  int numuTrueProton = 0;
-  int nueRecoProton = 0;
-  int nueTrueProton = 0;
-  
-  int unsuccessfulCount = 0;
-  int successfulCount = 0;
-  
-  Int_t i = 0;
-  while (myReader.Next()) {
-    //if (i > 10000){ break; }
-    //if (i%5000==0) {cout << i << endl;}
-    
-    prongE->GetTree()->GetEntry(i);
+  //vector<int> FS_PDG {0, 1, 2, 3, 4, 5};
+  //vector<double> FS_E {27.3, 95.3, 2138.7, 8.9, 17.3, 82.4};
+   
 
-    double apothem = CalcApothem(vtx[0], vtx[1]);
-    double reco_lep_E = prongEarr->data()[0][3];
-    double Eavail = ((*blobRecoilTracker + *blobRecoilECAL)*1.17 - ((0.008 * reco_lep_E)+5))/1000.;
-    
-    double DSCalRatio;
-    double ODCalRatio;
-    if (HCALVisE[0]==0 && ECALVisE[0]==0) { DSCalRatio = 0; }
-    else { DSCalRatio = HCALVisE[0] / ECALVisE[0]; } 
-    if (ODVisE[0]==0 && sideECALVisE[0]==0) { ODCalRatio = 0;}
-    else { ODCalRatio = ODVisE[0] / sideECALVisE[0]; }
-    
-    bool hasTrueProton = false;
-    for (int j = 0; j < FS_PDG.GetSize(); j++) {
-      int part = abs(FS_PDG[j]);
-      if (part==2212 && FS_E[j] > 1038 ){
-	//if (part==2212){
-	hasTrueProton=true;
-      }
-    }
-    
-    //if (i==0){ //for investigating specific events
-        //cout << "nProngs: " << *nProngs << ", noVertexMismatch: " << *noVertexMismatch << ", noBackExitingTracks: " << *noBackExitingTracks << ", showerScore[0]: " << showerScore[0] << ", DSCalRatio: " << DSCalRatio << ", ODCalRatio: " << ODCalRatio << ", trackMultiplicity: " << *trackMultiplicity << ", firstFireFraction[0]: " << firstFireFraction[0] << ", tDead: " << *tDead << ", vertexMultiplicity: " << *vertexMultiplicity << ", meanFrontdedx[0]: " << meanFrontDEDX[0] << ", nonMIPClusFrac[0]: " << nonMIPClusFrac[0] << ", transverseGapScore[0]: " << transverseGapScore[0] << ", vtx[2]: " << vtx[2] << ", apothem: " << apothem << ", Eavail: " << Eavail << endl;
-    //}
+  tree->SetBranchAddress("mc_incoming", &inc);
+  tree->SetBranchAddress("mc_nFSPart", &nFS_part);
+  tree->SetBranchAddress("mc_FSPartPDG", FS_PDG);
+  tree->SetBranchAddress("mc_FSPartE", FS_E);
+  tree->SetBranchAddress("mc_run", &run);
+  tree->SetBranchAddress("mc_subrun", &subrun);
+  tree->SetBranchAddress("mc_nthEvtInFile", &gate); //off by one vs arachne gate, I think this number + 1 = arachne gate num
 
-    //My "precuts", if you will, basically all cuts to get nu_e events but nothing about the proton yet
-    if (*nProngs>0 && *noVertexMismatch==1 && *noBackExitingTracks==1 && showerScore[0]>0.7 && DSCalRatio<=0.2 && ODCalRatio<=0.05 && *trackMultiplicity<6 && firstFireFraction[0]>=0.25 && *tDead<=1 && *vertexMultiplicity==1 && meanFrontDEDX[0]<2.4 && nonMIPClusFrac[0]>0.4 && transverseGapScore[0]>15 && vtx[2]>5980 && vtx[2]<8422&& apothem<850 && Eavail<0.8){
-      counter++;
-      //tree->GetTree()->GetEntry(i);
-      //newTree->Fill();
-      
-      if (hasTrueProton) { 	
-	nTrueProtonsBeforeReco++;  
-	if (*MAD_proton_endPointZ<=0){
-	  cout << "i: " << i << " - UNSUCCESSFULLY reco'd proton at run: " << *run << ", subrun: " << *subrun << ", nthEvtInFile: " << *nthEvtInFile << endl;
-          //cout << "MasterAnaDev_proton_endPointZ: " << *MAD_proton_endPointZ << endl;
-	  unsuccessfulCount++;
-	}
-      }
+  tree->SetBranchAddress("MasterAnaDev_proton_endPointZ", &recoProton);
+  tree->SetBranchAddress("HasNoBackExitingTracks", &noBackExitingTracks);
+  tree->SetBranchAddress("prong_HCALVisE", &HCalVisE);
+  tree->SetBranchAddress("prong_ECALVisE", &ECalVisE);
+  tree->SetBranchAddress("prong_ODVisE", &ODVisE);
+  tree->SetBranchAddress("prong_SideECALVisE", &SideCalVisE);
+  tree->SetBranchAddress("HasNoVertexMismatch", &noVertexMismatch);
+  tree->SetBranchAddress("VertexTrackMultiplicity", &vertexTrackMultiplicity);
+  tree->SetBranchAddress("prong_dEdXMeanFrontTracker", &frontdEdX);
+  tree->SetBranchAddress("prong_TransverseGapScore", &transverseGapScore);
 
-      if (*MAD_proton_endPointZ>0){ 
-	nRecoProtons++; 
-	if (hasTrueProton) { 
-	  nTrueProtonsAfterReco++;
-	  cout << "i: " << i << " - SUCCESSFULLY reco'd proton at run: " << *run << ", subrun: " << *subrun << ", nthEvtInFile: " << *nthEvtInFile << endl;
-	  successfulCount++;
-	  //cout << "MasterAnaDev_proton_endPointZ: " << *MAD_proton_endPointZ << endl;
-	}
-      }
-      
-    }
-    
+  int NuMu_RecoProtons = 0;
+  int NuMu_TrueProtons = 0;
+  int NuE_RecoProtons = 0;
+  int NuE_TrueProtons = 0;
+  int count = 0;
 
+  cout << "skrt" << endl;
+  for (int i = 0; tree->LoadTree(i) >= 0; i++){
+    tree->GetEntry(i);
+
+    //for diagnostivcs
     /*
-    if (*mc_incoming == 14 && *MAD_proton_endPointZ > 0){ numuRecoProton++; }
-    if (*mc_incoming == 14 && hasTrueProton){ numuTrueProton++; }
-    if (*mc_incoming == 12 && *MAD_proton_endPointZ > 0){ nueRecoProton++; }
-    if (*mc_incoming == 12 && hasTrueProton){ nueTrueProton++; }
+    if (i < 10){
+      cout << "size of pdg array: " << sizeof(FS_E)/sizeof(double) << endl;
+      int index = 0;
+      for (int energy : FS_E){
+	cout << "contents of pdg array[" << index << "]: " << energy << endl;
+	index++;
+	if (index >= nFS_part){ break;}
+      }
+    }
     */
 
-    hasTrueProton = false;
-    i++;
-  }
-  //newTree->Write();
-  //outFile->Write();
-  //outFile->Close();
+    //if (inc==14 && recoProton > 0){ NuMu_RecoProtons++;    };
+    //if (inc==14 && hasTrackableFSProton(FS_PDG, FS_E, nFS_part)){ NuMu_TrueProtons++; };
+    //if (inc==12 && recoProton > 0){ NuE_RecoProtons++; };
+    //if (inc==12 && hasTrackableFSProton(FS_PDG, FS_E, nFS_part)){ NuE_TrueProtons++; }
+ 
+    //OK let's try and redo those last two but without the use of mc_incoming... aka the most barebones version of my selection
+    double DSCalVisE = HCalVisE/ECalVisE;
+    double ODCalVisE = ODVisE/SideCalVisE;  
 
-  cout << "total # events: " << i << endl;
+    //if (noBackExitingTracks==1 && DSCalVisE <= 0.2 && ODCalVisE <= 0.05 && noVertexMismatch==1 && vertexTrackMultiplicity < 6 && frontdEdX < 2.4 && transverseGapScore > 15 && recoProton > 0) { NuE_RecoProtons++; }
 
-  //cout << "numu reco proton events: " << numuRecoProton << endl;
-  //cout << "numu true proton events: " << numuTrueProton << endl;
-  //cout << "nue reco proton events: " << nueRecoProton << endl;
-  //cout << "nue true proton events: " << nueTrueProton << endl;
+    //if (noBackExitingTracks==1 && DSCalVisE <= 0.2 && ODCalVisE <= 0.05 && noVertexMismatch==1 && vertexTrackMultiplicity < 6 && frontdEdX < 2.4 && transverseGapScore > 15 && hasTrackableFSProton(FS_PDG, FS_E, nFS_part)) { NuE_TrueProtons++; }
+
+    
+    if (noBackExitingTracks==1 && DSCalVisE <= 0.2 && ODCalVisE <= 0.05 && noVertexMismatch==1 && vertexTrackMultiplicity < 6 && frontdEdX < 2.4 && transverseGapScore > 15) { 
+      count++;
+      cout << "count : " << count << ", recoProton = " << recoProton << ", nuE_recoprotons = " << NuE_RecoProtons << endl;
+      if (recoProton > 0) {
+	cout << "WENT IN" << endl;
+	NuE_RecoProtons = NuE_RecoProtons + 1; 
+      }
+      else { cout << "DIDN'T GO IN" << endl; }
+
+      /*
+      if (hasTrackableFSProton(FS_PDG, FS_E, nFS_part)) {
+	NuE_TrueProtons++;
+	}*/
+      //double andrea = 12.7+19.6;
+    }
+    
   
-  cout << "Unsuccessful count: " << unsuccessfulCount << endl;
-  cout << "Successful count: " << successfulCount << endl;
 
-  cout << "# events BEFORE checking for reco protons: " << counter << endl;
-  cout << "# events with true protons BEFORE checking for reco protons: " << nTrueProtonsBeforeReco << endl;
-  cout << "# events AFTER checking for reco protons: " << nRecoProtons << endl;
-  cout << "# events with true protons AFTER checking for reco protons: " << nTrueProtonsAfterReco << endl;
+  }
+  cout << "numu reco proton events: " << NuMu_RecoProtons << endl;
+  cout << "numu true proton events: " << NuMu_TrueProtons << endl;
+  cout << "nue reco proton events: " << NuE_RecoProtons << endl;
+  cout << "nue true proton events: " << NuE_TrueProtons << endl;
+
+  tree->ResetBranchAddresses();
 }
+

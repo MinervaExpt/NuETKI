@@ -183,7 +183,7 @@ double CalcPhiPt(ROOT::Math::XYZVector& electron_pt, ROOT::Math::XYZVector& prot
   return phi * 180/pi;  //return alpha in degrees cause that's how I've set up my bins for now
 }
 
-void PlotMCStackFromTree() {
+void ReadSelectedMADTuple() {
   //TString filename = "/exp/minerva/data/users/cpernas/TUPLE_MC_May_01_2025_me1B_all_cuts_with_Michel_sideband.root";
   //TString filename = "/exp/minerva/data/users/cpernas/TUPLE_MC_May_14_2025_me1M_all_cuts_with_Michel_sideband.root";
   //TString filename = "/exp/minerva/data/users/cpernas/TUPLE_MC_May_12_2025_NuEOnly_me1M_all_cuts_with_Michel_sideband.root";

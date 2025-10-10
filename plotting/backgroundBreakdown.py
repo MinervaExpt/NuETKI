@@ -27,10 +27,17 @@ drawData = True
 #signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco"]
 #signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco", "DeltaPt_selected_signal_reco","AlphaPt_selected_signal_reco"]
 #signalHistoNames = ["E_nu_selected_signal_reco", "E_avail_selected_signal_reco", "Lepton_Pt_selected_signal_reco", "E_lep_selected_signal_reco", "Theta_lep_selected_signal_reco", "RecoProtonP_selected_signal_reco", "RecoProtonTheta_selected_signal_reco", "DeltaPt_selected_signal_reco","AlphaPt_selected_signal_reco", "DeltaPtX_selected_signal_reco", "DeltaPtY_selected_signal_reco", "PhiPt_selected_signal_reco"]
-signalHistoNames = ["E_nu_MichelSB_selected_signal_reco", "E_avail_MichelSB_selected_signal_reco", "Lepton_Pt_MichelSB_selected_signal_reco", "E_lep_MichelSB_selected_signal_reco", "Theta_lep_MichelSB_selected_signal_reco", "RecoProtonP_MichelSB_selected_signal_reco", "RecoProtonTheta_MichelSB_selected_signal_reco", "DeltaPt_MichelSB_selected_signal_reco","AlphaPt_MichelSB_selected_signal_reco", "DeltaPtX_MichelSB_selected_signal_reco", "DeltaPtY_MichelSB_selected_signal_reco", "PhiPt_MichelSB_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_selected_signal_reco", "Sum_T_p_selected_signal_reco", "DeltaPt_selected_signal_reco", "Sum_T_p_selected_signal_reco", "DeltaPtX_selected_signal_reco", "DeltaPtY_selected_signal_reco"]
 
+#Sidebands
+#signalHistoNames = ["E_nu_MeanFrontDEDXSB_selected_signal_reco", "E_avail_MeanFrontDEDXSB_selected_signal_reco", "Lepton_Pt_MeanFrontDEDXSB_selected_signal_reco", "E_lep_MeanFrontDEDXSB_selected_signal_reco", "Theta_lep_MeanFrontDEDXSB_selected_signal_reco", "RecoProtonP_MeanFrontDEDXSB_selected_signal_reco", "RecoProtonTheta_MeanFrontDEDXSB_selected_signal_reco", "DeltaPt_MeanFrontDEDXSB_selected_signal_reco","AlphaPt_MeanFrontDEDXSB_selected_signal_reco", "DeltaPtX_MeanFrontDEDXSB_selected_signal_reco", "DeltaPtY_MeanFrontDEDXSB_selected_signal_reco", "PhiPt_MeanFrontDEDXSB_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_MeanFrontDEDXSB_selected_signal_reco", "Sum_T_p_MeanFrontDEDXSB_selected_signal_reco", "DeltaPt_MeanFrontDEDXSB_selected_signal_reco", "Sum_T_p_MeanFrontDEDXSB_selected_signal_reco", "DeltaPtX_MeanFrontDEDXSB_selected_signal_reco", "DeltaPtY_MeanFrontDEDXSB_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_MichelSB_selected_signal_reco", "Sum_T_p_MichelSB_selected_signal_reco", "DeltaPt_MichelSB_selected_signal_reco", "Sum_T_p_MichelSB_selected_signal_reco", "DeltaPtX_MichelSB_selected_signal_reco", "DeltaPtY_MichelSB_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_NIsoClusSB_selected_signal_reco", "Sum_T_p_NIsoClusSB_selected_signal_reco", "DeltaPt_NIsoClusSB_selected_signal_reco", "Sum_T_p_NIsoClusSB_selected_signal_reco", "DeltaPtX_NIsoClusSB_selected_signal_reco", "DeltaPtY_NIsoClusSB_selected_signal_reco"]
+#signalHistoNames = ["Lepton_Pt_NPiSB_selected_signal_reco", "Sum_T_p_NPiSB_selected_signal_reco", "DeltaPt_NPiSB_selected_signal_reco", "Sum_T_p_NPiSB_selected_signal_reco", "DeltaPtX_NPiSB_selected_signal_reco", "DeltaPtY_NPiSB_selected_signal_reco"]
 
-#signalHistoNames = ["DeltaPt_selected_signal_reco", "AlphaPt_selected_signal_reco"]
+signalHistoNames = ["DeltaPt_selected_signal_reco"]
+#signalHistoNames = ["DeltaPt_MeanFrontDEDXSB_selected_signal_reco", "DeltaPt_selected_signal_reco"]
 #signalHistoNames = ["ProtonP_selected_signal_reco", "Theta_p_selected_signal_reco"]
 #signalHistoNames = ["Lepton_Pt_selected_signal_reco"]
 
@@ -130,7 +137,7 @@ for i in range(len(signalHistoNames)):
     
     if drawData:
         data = dataFile.Get(dataHistoNames[i])
-        data = PlotUtils.MnvH1D(data)
+        #data = PlotUtils.MnvH1D(data)
         #print(dataHistoNames[i])
         data.SetTitle('data')
         plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, signal.GetXaxis().GetTitle(), "N events")
@@ -139,8 +146,8 @@ for i in range(len(signalHistoNames)):
         plotter.AddPlotLabel(normalization, 0.2, 0.95, 0.03)
 
     else:
-        data = dataFile.Get(dataHistoNames[i])
-        #data = mcFile.Get(dataHistoNames[i])
+        #data = dataFile.Get(dataHistoNames[i])
+        data = mcFile.Get(dataHistoNames[i])
         bins = data.GetXaxis()
         #bins = signal.GetXaxis()
         for i in range(bins.GetNbins()):
