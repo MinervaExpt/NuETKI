@@ -9,7 +9,7 @@
 //class MichelEvent;
 //class CVUniverse;
 
-class MichelSideband: public Study
+class NPiSideband: public Study
 {
   private:
     std::vector<Variable*> fVars;
@@ -17,14 +17,14 @@ class MichelSideband: public Study
   
   public:
   //what args do I need for my sideband constructor??
-    MichelSideband(std::vector<Variable*> vars,
+    NPiSideband(std::vector<Variable*> vars,
 		 std::map<std::string, std::vector<CVUniverse*>>& mc_error_bands,
 		 std::map<std::string, std::vector<CVUniverse*>>& truth_error_bands,
 		   std::vector<CVUniverse*>& data_error_bands): Study() {
 
       //Making copies of all my existing variables but appending MichelSB to distinguish which ones are the sideband
       for (auto& var : vars){
-	fVars.push_back(new Variable((var->GetName()+"_MichelSB").c_str(), var->GetAxisLabel(), var->GetBinVec(), var->GetRecoFunc(), var->GetTrueFunc()));
+	fVars.push_back(new Variable((var->GetName()+"_NPiSB").c_str(), var->GetAxisLabel(), var->GetBinVec(), var->GetRecoFunc(), var->GetTrueFunc()));
       }
 
       //Initialize SB histos to be filled and written
@@ -82,14 +82,13 @@ class MichelSideband: public Study
     using Hist = PlotUtils::HistWrapper<CVUniverse>;
 
       void fillSelectedMC(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
-	//std::cout << "Entering MichelSideband::fillSelectedMC" << std::endl;
-	//std::cout << "improved_nmichel = " << univ.GetImprovedNMichel() << std::endl;      
-	//std::cout << "N Iso Clusters = " << univ.GetNIsoBlobs() << std::endl;      
+	//std::cout << "Entering NPiSideband::fillSelectedMC" << std::endl;
+	//std::cout << "improved_nmichel = " << univ.GetImprovedNMichel() << std::endl;
+	//std::cout << "N Iso Clusters = " << univ.GetNIsoBlobs() << std::endl;
 
-      //if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() < 2){
-      if (univ.GetImprovedNMichel() > 0){
-
-	g_OutputTreeManager.Fill("Michel_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
+      if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){
+	
+	g_OutputTreeManager.Fill("NPi_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
 
 	for (auto& var: fVars) var->selectedMCReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
 	//const bool isSignal = false; //figure out how to check this later, I don't have michelcuts to do it for me :/
@@ -122,8 +121,7 @@ class MichelSideband: public Study
 
     void fillSelectedData(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
       for (auto& var: fVars){
-	//if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() < 2){
-	if (univ.GetImprovedNMichel() > 0){
+	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){
 	  var->dataHist->FillUniverse(&univ, var->GetRecoValue(univ), 1); //should never be weighting data
         }
       }
@@ -132,8 +130,7 @@ class MichelSideband: public Study
   
     void fillSelectedSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
       for (auto& var: fVars){
-	//if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() < 2){
-	if (univ.GetImprovedNMichel() > 0){
+	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){       
 	  var->selectedSignalReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
         }
       }
@@ -143,8 +140,7 @@ class MichelSideband: public Study
     void fillTruthSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
       //std::cout << "carlos testing fillTruthSignal\n" << std::endl;
       for (auto& var: fVars){
-	//if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() < 2){
-	if (univ.GetImprovedNMichel() > 0){
+	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){
 	  var->selectedSignalReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
         }
       }
