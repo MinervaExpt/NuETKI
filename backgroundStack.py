@@ -5,7 +5,7 @@ from ROOT import PlotUtils
 
 gROOT.SetBatch() #Don't render histograms to a window.  Also gets filled areas correct.
 
-var = "pTmu"
+var = "DeltaPt"
 dataName = var + "_data"
 
 ratioMin = 0.7
