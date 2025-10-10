@@ -14,10 +14,12 @@
 #ifndef CVUNIVERSE_H
 #define CVUNIVERSE_H
 
+#include "PlotUtils/MinervaUniverse.h"
+#include "PlotUtils/GeantHadronSystematics.h"
+#include "PlotUtils/CaloCorrection.h"
+
 #include <iostream>
 #include <TMath.h>
-
-#include "PlotUtils/MinervaUniverse.h"
 #include <vector>
 #include <TRandom.h>
 #include <TMath.h>
@@ -32,12 +34,14 @@
 #include <TVector3.h>
 #include <TLorentzVector.h>
 
-
 class CVUniverse : public PlotUtils::MinervaUniverse {
 
   public:
   #include "PlotUtils/MuonFunctions.h" // GetMinosEfficiencyWeight
   #include "PlotUtils/TruthFunctions.h" //Getq3True
+  #include "PlotUtils/RecoilEnergyFunctions.h" //GetRecoilEnergy
+  #include "PlotUtils/WeightFunctions.h"
+
   // ========================================================================
   // Constructor/Destructor
   // ========================================================================
@@ -53,8 +57,8 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // ========================================================================
   static constexpr double M_n = 939.56536;  //MeV
   static constexpr double M_p = 938.272013; //MeV
-
   static constexpr double M_e = 0.51099895; //MeV
+  static constexpr double M_pi = 139.57039; //MeV
   static constexpr double M_nucleon = (1.5*M_n+M_p)/2.5;
 
   static constexpr int PDG_n = 2112;
@@ -191,7 +195,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     for (int i = 0; i < secondary_protons.size(); i++){
       sum_secondary_proton_energy += secondary_protons[i];
     }
-
+    //std::cout << "Sum Proton T RECO: " << primary_proton_energy + sum_secondary_proton_energy << std::endl;
     return primary_proton_energy + sum_secondary_proton_energy;
   }
   
@@ -308,7 +312,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //delta pT (magnitude of the vector), in GeV
   double GetDeltaPt() const{
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPtVec();
-    //std::cout << "delta Pt: " << sqrt(deltaPt_vec.Mag2()) << std::endl;
+    //std::cout << "delta Pt RECO: " << sqrt(deltaPt_vec.Mag2()) << std::endl;
     return sqrt(deltaPt_vec.Mag2()); 
   }
 
@@ -340,10 +344,17 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     ROOT::Math::XYZVector electron_pt_in_beam_frame = r(electronPt_vec);
     ROOT::Math::XYZVector delta_pt_in_beam_frame = r(deltaPt_vec);
 
+    //std::cout << "\nelectron pT vec: ( " << electron_pt_in_beam_frame.X() << " , " << electron_pt_in_beam_frame.Y() << " , " << electron_pt_in_beam_frame.Z() << " ) " << std::endl;
+    //std::cout << "delta pT vec: ( " << delta_pt_in_beam_frame.X() << " , " << delta_pt_in_beam_frame.Y() << " , " << delta_pt_in_beam_frame.Z() << " ) " << std::endl;
+    //std::cout << "dot product of the two: " << delta_pt_in_beam_frame.Dot(electron_pt_in_beam_frame) << std::endl;
+    //std::cout << "magnitude (norm) of e_pT vec: " << sqrt(electron_pt_in_beam_frame.Mag2()) << std::endl;
+    
     //expression for the scalar projection
     double num = delta_pt_in_beam_frame.Dot(electron_pt_in_beam_frame);
     double denom = sqrt(electron_pt_in_beam_frame.Mag2());
-    return num/denom;
+
+    //std::cout << "final result: " << num/denom << "\n" << std::endl;
+    return -num/denom;
   }
   
   //Alpha_t, the TKI boosting angle. it's the angle between inverted electron pT and delta pT
@@ -377,8 +388,21 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //Delta P parallel, or the sum of longitudinal (wrt beam direction) momentum of proton & electron.
   //Because this is 1D only can just sum the two values I already have
   //Don't need to mess about with vectors, and those functions already return neg & pos w.r.t. beam direction
-  double GetDeltaPParallel() const{
+  double GetSumPParallel() const{    
     return GetElectronPParallel() + GetProtonPParallel();
+  }
+
+  //This is the variable reported by Jeffrey & Xianguo, which is NOT simply delta P parallel
+  //Delta P Parallel is the sum of lepton + proton parallel, and then this is the difference between that and initial neutrino longitudinal momentum
+  //Which is estimated by the magnitude of the recoil momentum of the struck nucleus or something
+  //The delta here is technically the same delta as above, but in the the transverse case the neutrino's contribution is 0,
+  //so it simplifies to lepton + proton. That's not the case here. 
+  double GetDeltaP_L() const{    
+    return 0;
+  }
+
+  //This variable represents the initial struck nucleon momentum, determined by delta Pt and delta Pl.
+  double GetP_n() const{
   }
   
   virtual double GetQ2Reco() const{
@@ -409,6 +433,35 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return out;
   }
 
+  //in rad
+  double GetElectronThetaTrue() const {
+    std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
+    ROOT::Math::XYZVector p(electronp[0], electronp[1], electronp[2]);   
+    ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //This is a slight rotation so that the theta we get is wrt to the beam direction and not the z axis, which points down to the ground 3.3 degrees. 
+    return (r(p)).Theta();    
+  }
+
+  //in deg
+  double GetElectronThetaDegTrue() const {
+    return GetElectronThetaTrue() * (180./pi);
+  }
+  
+  //True lepton pT (in GeV)
+  double GetElectronPtTrue() const {
+    double leptonP = sqrt(pow(GetVecElem("mc_primFSLepton", 3), 2) - pow(M_e, 2));
+    double out = (leptonP * std::sin(GetElectronThetaTrue()))/1000.;
+    //std::cout << "True lepton pT: " << out << std::endl;
+    return out;
+  }
+
+  //True lepton p parallel (in GeV)
+  double GetElectronPParallelTrue() const {
+    double leptonP = sqrt(pow(GetVecElem("mc_primFSLepton", 3), 2) - pow(M_e, 2));
+    double out = (leptonP * std::cos(GetElectronThetaTrue()))/1000.;
+    //std::cout << "True lepton pT: " << out << std::endl;
+    return out;
+  }
+
   //gets highest true proton kinetic energy in GeV, -999 (- M_p for now, will fix) if no true protons
   double GetProtonKETrue() const {
     int highestProtonIndex = GetHighestEnergySignalProtonIndex();
@@ -423,13 +476,13 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //proton theta (spherical coords, in deg) wrt beam direction, -999 if no true protons
-  //in deg
+  //in rad
   double GetProtonThetaTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
     if (i > -1){
       ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
       ROOT::Math::RotationX r(-3.3 * (pi / 180.));
-      double out = (r(p)).Theta()*(180/pi);
+      double out = (r(p)).Theta();
       //std::cout << "True (highest energy) proton Theta: " << out << std::endl;
       return out;
     }
@@ -437,7 +490,81 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       return -999; 
     }
   }
-  
+
+  //to deg
+  double GetProtonThetaDegTrue() const {
+    double proton_theta = GetProtonThetaTrue();
+    if (proton_theta == -999) {
+      return -999;
+    } else {
+      return proton_theta * (180./pi);
+    }
+  }
+
+
+  //Returns momentum of the highest energy true final state proton (in GeV)
+  double GetProtonPTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
+      //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
+      return protonP/1000.;
+    }
+    else {
+      return -999;
+    }
+  }
+
+  //true proton pT (in GeV) of highest energy proton
+  double GetProtonPtTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      //returns momentum in GeV, so convert to MeV which is what M_p is in, should be good
+      double protonP = GetProtonPTrue()*1000.;
+      double protonAngleRad = GetProtonThetaTrue();
+      
+      double out = (protonP * std::sin(protonAngleRad))/1000.;	
+      //std::cout << "True (highest energy) proton pT: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+
+  //true proton pT (in GeV) of highest energy proton
+  double GetProtonPParallelTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      //returns momentum in GeV, so convert to MeV which is what M_p is in, should be good
+      double protonP = GetProtonPTrue()*1000.;
+      double protonAngleRad = GetProtonThetaTrue();
+      
+      double out = (protonP * std::cos(protonAngleRad))/1000.;	
+      //std::cout << "True (highest energy) proton pT: " << out << std::endl;
+      return out;
+    }
+    else {
+      return -999; 
+    }
+  }
+
+  //Total Kinetic energy (sigma T) of all proton candidates
+  double GetSumProtonTTrue() const {
+    double T_p = 0; //sum of proton kinetic energies
+
+    int nFSPart = GetInt("mc_nFSPart");
+    std::vector<double> FSPartE = GetVecDouble("mc_FSPartE");
+    std::vector<int> FSPartPDG = GetVecInt("mc_FSPartPDG");
+
+    for (int i=0; i<nFSPart; i++){
+      if (FSPartPDG[i] == 2212){ 
+	T_p += FSPartE[i] - M_p; //add only kinetic (not total) energy for protons
+      } 
+    }
+    return T_p/1000.;
+  }
+
   //Angle (in deg) between true primary electron and true highest energy proton in rad, -999 if no protons
   double GetOpeningAngleTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
@@ -459,55 +586,174 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     }
   }
 
-  //Returns momentum of the highest energy true final state proton (in GeV)
-  double GetProtonPTrue() const {
+  //E_avail as defined in truth, basically summing all sources of visible energy
+  double GetEavailTrue() const {
+    double T_p = 0; //sum of proton kinetic energies
+    double T_pi = 0; //sum of charged pion kinetic energies
+    double E_pi0 = 0; //sume of neutral pion total energies
+    double E_s = 0; //Sum of (strange baryon energy - proton mass)
+    double E_sbar = 0; //Sum of (anti baryon energy + proton mass)
+    double E_other = 0; //sum of total energy of any other particles, NOT INCLUDING NEUTRONS
+
+    int nFSPart = GetInt("mc_nFSPart");
+    std::vector<double> FSPartPx = GetVecDouble("mc_FSPartPx");
+    std::vector<double> FSPartPy = GetVecDouble("mc_FSPartPy");
+    std::vector<double> FSPartPz = GetVecDouble("mc_FSPartPz");
+    std::vector<double> FSPartE = GetVecDouble("mc_FSPartE");
+    std::vector<int> FSPartPDG = GetVecInt("mc_FSPartPDG");
+
+    
+    for (int i=0; i<nFSPart; i++){
+      if (abs(FSPartPDG[i]) == 11 || abs(FSPartPDG[i]) == 13 || FSPartPDG[i] == 2112 || FSPartPDG[i] > 1000000000){
+	continue; //don't want to count leptons, neutrons, or nuclear remnants
+      } else if (FSPartPDG[i] == 2212){ 
+	T_p += FSPartE[i] - M_p; //add only kinetic (not total) energy for protons
+      } else if (abs(FSPartPDG[i]) == 211){ 
+	T_pi += FSPartE[i] - M_pi; //add only kinetic (not total) energy for charged pions
+      } else if (abs(FSPartPDG[i]) == 111){ 
+	E_pi0 += FSPartE[i]; //add pi0 total energy
+      } else if (FSPartPDG[i] > 2000){
+	E_s += FSPartE[i] - M_p; //add total energy - proton mass for strange baryons (why?)
+      } else if (FSPartPDG[i] < 2000){
+	E_sbar += FSPartE[i] + M_p; //add total energy + proton mass for strange antibaryons (why???)
+      } else {
+	E_other += FSPartE[i]; //add total energy for anything else (mostly gammas, kaons i think?)
+      }
+    }
+
+    double E_avail = T_p + T_pi + E_pi0 + E_s + E_sbar + E_other;
+    return E_avail/1000.;
+  }
+
+  double GetDeltaPtTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
     if (i > -1){
-      double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
-      //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
-      return protonP/1000.;
+      ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
+      ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
+
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //rotation into beam frame
+      ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //rotation back into lab frame
+
+      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+      electronPt_vec.SetZ(0);
+      protonPt_vec.SetZ(0);
+
+      //do I need to rotate back for this? I don't think so but double check
+      ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
+      return sqrt(deltaPt_vec.Mag2())/1000.;
+    }
+    else {
+      return -999; //what do I return for delta pt true if no true protons?
+    }
+  }
+
+  double GetDeltaPtXTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
+      ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
+
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //rotation into beam frame
+      ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //rotation back into lab frame
+
+      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+      electronPt_vec.SetZ(0);
+      protonPt_vec.SetZ(0);
+
+      //Still in beam frame
+      ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
+      double num = deltaPt_vec.Y()*electronPt_vec.X() - deltaPt_vec.X()*electronPt_vec.Y();
+      double denom = sqrt(electronPt_vec.Mag2());
+      return (num/denom)/1000.;
+    }
+    else {
+      return -999; //what do I return for delta pt true if no true protons?
+    }
+  }
+
+  double GetDeltaPtYTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
+      ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
+
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //rotation into beam frame
+      ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //rotation back into lab frame
+
+      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+      electronPt_vec.SetZ(0);
+      protonPt_vec.SetZ(0);
+
+      //Still in beam frame
+      ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
+
+      double num = deltaPt_vec.Dot(electronPt_vec);
+      double denom = sqrt(electronPt_vec.Mag2());
+      //std::cout << "TRUE delta PtY: " << (num/denom)/1000. << std::endl;
+      return -(num/denom)/1000.;
+    }
+    else {
+      return -999; //what do I return for delta pt true if no true protons?
+    }
+  }
+
+  double GetAlphaTTrue() const {
+    int i = GetHighestEnergySignalProtonIndex();
+    if (i > -1){
+      ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
+      ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
+
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //rotation into beam frame
+      ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //rotation back into lab frame
+      
+      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+      electronPt_vec.SetZ(0);
+      protonPt_vec.SetZ(0);
+
+      //Still in beam frame
+      ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
+
+      double numerator = ((-1*electronPt_vec).Dot(deltaPt_vec));
+      double denominator = ( sqrt(electronPt_vec.Mag2()) * sqrt(deltaPt_vec.Mag2()) );
+      double alpha = std::acos(numerator/denominator);
+      
+      return alpha * 180/pi;
     }
     else {
       return -999;
     }
   }
 
-  //true proton pT (in GeV) of highest energy proton
-  double GetProtonPtTrue() const {
+  double GetPhiTTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
     if (i > -1){
-      //returns momentum in GeV, so convert to MeV which is what M_p is in, should be good
-      double protonP = GetProtonPTrue()*1000.;
-      double protonAngleRad = GetProtonThetaTrue()*(pi/180);
+      ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
+      ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
+
+      ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //rotation into beam frame
+      ROOT::Math::RotationX r2(3.3 * (pi / 180.)); //rotation back into lab frame
       
-      double out = (protonP * std::sin(protonAngleRad))/1000.;	
-      //std::cout << "True (highest energy) proton pT: " << out << std::endl;
-      return out;
+      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
+      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
+      electronPt_vec.SetZ(0);
+      protonPt_vec.SetZ(0);
+
+      //Still in beam frame
+      ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
+
+      double numerator = ((-1*electronPt_vec).Dot(protonPt_vec));
+      double denominator = ( sqrt(electronPt_vec.Mag2()) * sqrt(protonPt_vec.Mag2()) );
+      double phi = std::acos(numerator/denominator);
+      
+      return phi * 180/pi;
     }
     else {
-      return -999; 
+      return -999;
     }
-  }
-  
-  double GetElectronThetaTrue() const {
-    std::vector<double> electronp = GetVecDouble("mc_primFSLepton");
-    ROOT::Math::XYZVector p(electronp[0], electronp[1], electronp[2]);   
-    ROOT::Math::RotationX r(-3.3 * (pi / 180.)); //This is a slight rotation so that the theta we get is wrt to the beam direction and not the z axis, which points down to the ground 3.3 degrees. 
-    return (r(p)).Theta();    
-  }
-
-  //True lepton pT (in GeV)
-  double GetElectronPtTrue() const {
-    double leptonP = sqrt(pow(GetVecElem("mc_primFSLepton", 3), 2) - pow(M_e, 2));
-    double out = (leptonP * std::sin(GetElectronThetaTrue()))/1000.;
-    //std::cout << "True lepton pT: " << out << std::endl;
-    return out;
-  }
-
-  //p sure this is wrong because it will include invisible energy (from neutrons n shit)
-  //Ok for now though, I think that only comes into play when we start looking at migration matrices & systematics etc
-  double GetEavailTrue() const {
-    return (GetDouble("mc_incomingE") - GetVecElem("mc_primFSLepton", 3))/1000.;
   }
   
   // ========================================================================
@@ -732,12 +978,41 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   virtual int GetTDead() const {
     return GetInt("phys_n_dead_discr_pair_upstream_prim_track_proj");
   }  
+
+  //Needed for response/recoil systematics to work properly after Anezka's 2023 updates
+  //Which correspond to reworked particle response branches in p4 and onwards
+  //but like, this is target region specific... 
+  double ApplyCaloTuning(double calRecoilE) const{
+    //Path to MParamFiles calibration files
+    std::string pwd = "$MPARAMFILESROOT/data/Calibrations/energy_calib/CalorimetryTunings.txt";
+    
+    //THESE TWO ARE SUPERRRR DIFFERENT, how do I know which to use??? do I even need to worry about this? But how do I do response systematics without it??
+    util::CaloCorrection Nu_Tracker(pwd.c_str(), "NukeCC_Nu_Tracker");
+    //util::CaloCorrection Nu_Tracker(pwd.c_str(), "CCNuE_Nu_Tracker");
+
+    return Nu_Tracker.eCorrection(calRecoilE/1000.)*1000.; //MeV
+  }
+
+  double GetCalRecoilEnergy() const {
+    return GetDouble("part_response_total_recoil_passive_allNonMuonClusters_id")+ GetDouble("part_response_total_recoil_passive_allNonMuonClusters_od"); // in MeV
+  }
+  double GetNonCalRecoilEnergy() const {
+    return 0.0; //??? Anezka's is like this but is that correct?
+  }
+
   
   // ========================================================================
   // Other truth variables
   // ========================================================================  
   int GetInteractionType() const {
-    // 4
+    // it's mostly 1, 2, 3, lil bit of 8
+    // and very lil bit of 4 
+    // 1 = QE
+    // 2 = Res
+    // 3 = DIS
+    // 4 = Coherent
+    // 7 = nu + e elastic (I should check this, it's like 11 events out of a full 180000 entry tuple...)
+    // 8 = MEC (meson exchange current?)
     return GetInt("mc_intType");
   }
   
