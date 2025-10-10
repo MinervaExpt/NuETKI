@@ -1,11 +1,11 @@
-#define MC_OUT_FILE_NAME "MC_June_12_2025_NuE_Only.root"
-#define DATA_OUT_FILE_NAME "Data_June_12_2025_NuE_Only.root"
-#define MC_TUPLE_OUT_FILE_NAME "TUPLE_MC_June_12_2025_NuE_Only.root"
+#define MC_OUT_FILE_NAME "MC_Oct_06.root"
+#define DATA_OUT_FILE_NAME "Data_Oct_06.root"
+#define MC_TUPLE_OUT_FILE_NAME "TUPLE_Oct_06.root"
 //#define MC_OUT_FILE_NAME "efficiencyTesting.root"
 //#define DATA_OUT_FILE_NAME "dummyData.root"
 
-bool write_tree = true;
-//bool write_tree = false;
+//bool write_tree = true;
+bool write_tree = false;
 
 #define USAGE					\
 "\n*** USAGE ***\n"\
@@ -68,12 +68,10 @@ enum ErrorCodes
 
 //Studies and sidebands
 #include "studies/Study.h"
-//#include "studies/EMShowerScoreSB.h"
+#include "studies/MeanFrontDEDXSideband.h"
 #include "studies/MichelSideband.h"
-//#include "studies/E_lep_SB.h"
-//#include "studies/ModEAvailSB.h"
-//#include "studies/MeanFrontDEDX_SB.h"
-//#include "studies/ESC_SB.h"
+#include "studies/NIsoClusSideband.h"
+#include "studies/NPiSideband.h"
 
 //PlotUtils includes
 #include "PlotUtils/makeChainWrapper.h"
@@ -126,7 +124,7 @@ void LoopAndFillEventSelection(
   for (Long64_t i=0; i<nEntries; ++i)
   {
     if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
-    
+
     MichelEvent cvEvent;
     cvUniv->SetEntry(i);
     model.SetEntry(*cvUniv, cvEvent);
@@ -153,10 +151,12 @@ void LoopAndFillEventSelection(
 	//Instead I'll make a bitmask (basically a comparison bitset which I'll use to check all bits except the first one, which can be whatever
 	//and then I'll use that first cut result to fill my sideband (if 0, goes into sideband, if 1, goes into selected events)
 	std::bitset<64> cut_results = michelcuts.isMCSelected(*universe, myevent, cvWeight);  
-	constexpr int n_sidebands = 1; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
+
+	//IMPORTANT NOTE! THIS ISN'T ACTUALLY THE NUMBER OF SIDEBANDS, BUT THE NUMBER OF SIDEBAND CUTS!!!
+	//so for example with dans space of n iso clusters and nmichel, he has 2 cuts but 3 sidebands because one is the combo of the two cuts
+	constexpr int n_sidebands = 2; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
 	std::bitset<64> mask;
 	mask.set(); //set all bits in mask to 1
-	//mask.reset(0); //set first bit to 0 (first bit representing the first sideband cut, I can do more of these when I add more sidebands)
 	mask &= ~std::bitset<64>((1ULL << n_sidebands) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
 
 	//if (!cut_results.all()) continue; //skips events that don't pass ALL CUTS
@@ -258,7 +258,7 @@ void LoopAndFillData( PlotUtils::ChainWrapper* data,
       
       //if (!michelcuts.isDataSelected(*universe, myevent).all()) continue;
       std::bitset<64> cut_results = michelcuts.isDataSelected(*universe, myevent);  
-      constexpr int n_sidebands = 1; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
+      constexpr int n_sidebands = 2; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
       std::bitset<64> mask;
       mask.set(); //set all bits in mask to 1
       mask &= ~std::bitset<64>((1ULL << n_sidebands) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
@@ -428,16 +428,21 @@ int main(const int argc, const char** argv)
 
   const bool doCCQENuValidation = (reco_tree_name == "CCQENu"); //Enables extra histograms and might influence which systematics I use if the reco tree name is CCQENu...
 
-  //const bool is_grid = false; //TODO: Are we going to put this back?  Gonzalo needs it iirc.
+  //MacroUtil member variables are:
+  //PlotUtils::ChainWrapper* m_data, m_mc, m_truth
+  //string m_plist_string
+  //double m_data_pot, m_mc_pot
+  //And then it also has some getters: GetDataEntries(), GetMCEntries(), GetTruthEntries(), PrintMacroConfiguration(std::string macro_name = "")
   PlotUtils::MacroUtil options(reco_tree_name, mc_file_list, data_file_list, "minervame1A", true);
   options.m_plist_string = util::GetPlaylist(*options.m_mc, true); //TODO: Put GetPlaylist into PlotUtils::MacroUtil
 
   // You're required to make some decisions
-  PlotUtils::MinervaUniverse::SetNuEConstraint(true); //what is this? I think it's the neutrino-electron flux scattering constraint?? So should leave true?
+  PlotUtils::MinervaUniverse::SetNuEConstraint(true); //the neutrino-electron flux scattering constraint?? So should leave true?
   PlotUtils::MinervaUniverse::SetPlaylist(options.m_plist_string); //TODO: Infer this from the files somehow?
   PlotUtils::MinervaUniverse::SetAnalysisNuPDG(12); //Apparently this is: Analysis neutrino identity -- used for flux weights
   PlotUtils::MinervaUniverse::SetNFluxUniverses(100);
   PlotUtils::MinervaUniverse::SetZExpansionFaReweight(false);
+  PlotUtils::MinervaUniverse::RPAMaterials(false); //Sets whether you want to use different nuclei for RPA reweight, with false it just uses carbon which is fine for me
 
   //Now that we've defined what a cross section is, decide which sample and model
   //we're extracting a cross section for.
@@ -461,9 +466,9 @@ int main(const int argc, const char** argv)
   const double maxMeanFrontDEDX = 2.4; //in MeV/cm
   const double minElectronEnergy = 2.5; //in GeV
   const double maxModifiedEAvail = 1; //in GeV
-  const double maxESCChi2 = 20;
+  const double maxESCChi2 = 10;
 
-  const int maxNIsoBlobs = 2; //cut is exclusive
+  const int maxNIsoBlobs = 2; //cut is exclusive, ie not including 2
   const double maxIsoBlobEnergy = 250; //in MeV
   const double furthestUpstreamIsoBlobStartZ = -50; //in mm, aka do not allow any blobs where blob start Z - vtx Z is lower than x
   //ie do not allow any events with blobs that start more than -x mm upstream of vtx
@@ -486,15 +491,15 @@ int main(const int argc, const char** argv)
   //not technically sidebands, but maybe more sophisticated/specific cuts
   preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>(minEMTrackScore));
   //preCuts.emplace_back(new reco::MichelCut<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>(maxMeanFrontDEDX));
+  //preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>(maxMeanFrontDEDX));
   preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, MichelEvent>(minElectronEnergy));
   preCuts.emplace_back(new reco::ModifiedEavailable<CVUniverse, MichelEvent>(maxModifiedEAvail));
 
   //This is reduntant, but separating them helps to see the effect of requiring a proton track vs the actual chi^2 / esc node cut effects
   preCuts.emplace_back(new reco::ProtonInEvent<CVUniverse, MichelEvent>());
   preCuts.emplace_back(new reco::NIsoBlobs<CVUniverse, MichelEvent>(maxNIsoBlobs));
-  preCuts.emplace_back(new reco::IsoBlobEnergy<CVUniverse, MichelEvent>(maxIsoBlobEnergy));
-  preCuts.emplace_back(new reco::UpstreamIsoBlob<CVUniverse, MichelEvent>(furthestUpstreamIsoBlobStartZ));
+  //preCuts.emplace_back(new reco::IsoBlobEnergy<CVUniverse, MichelEvent>(maxIsoBlobEnergy));
+  //preCuts.emplace_back(new reco::UpstreamIsoBlob<CVUniverse, MichelEvent>(furthestUpstreamIsoBlobStartZ));
   preCuts.emplace_back(new reco::ESC<CVUniverse, MichelEvent>(maxESCChi2));
   
   //older / obsolete cuts
@@ -527,14 +532,10 @@ int main(const int argc, const char** argv)
   */
 
   //Sidebands
-  //sidebands.emplace_back(new reco::MeanFrontdEdXAbove<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>());
+  sidebands.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>(maxMeanFrontDEDX));
   sidebands.emplace_back(new reco::MichelCut<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::ElectronEnergy<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::ModifiedEavailable<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::ESC<CVUniverse, MichelEvent>());
-  
+  //sidebands.emplace_back(new reco::NIsoBlobs<CVUniverse, MichelEvent>(maxNIsoBlobs));
+
   //Hang also has a "hits nucleus" requirement in his signal definition, whats the best way to implement that...?
   signalDefinition.emplace_back(new truth::IsNue<CVUniverse>());
   signalDefinition.emplace_back(new truth::IsCC<CVUniverse>());
@@ -551,36 +552,41 @@ int main(const int argc, const char** argv)
 
   std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, MichelEvent>>> MnvTunev1;
 
-  //these cause a problem for some reason?? or one of them does... RPA I think actually
-  
-  //MnvTunev1.emplace_back(new PlotUtils::FluxAndCVReweighter<CVUniverse, MichelEvent>());
-  //MnvTunev1.emplace_back(new PlotUtils::GENIEReweighter<CVUniverse, MichelEvent>(true, false));
-  //MnvTunev1.emplace_back(new PlotUtils::LowRecoil2p2hReweighter<CVUniverse, MichelEvent>());
-  //MnvTunev1.emplace_back(new PlotUtils::MINOSEfficiencyReweighter<CVUniverse, MichelEvent>());
-
-  //MnvTunev1.emplace_back(new PlotUtils::RPAReweighter<CVUniverse, MichelEvent>());
-  
+  MnvTunev1.emplace_back(new PlotUtils::FluxAndCVReweighter<CVUniverse, MichelEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::GENIEReweighter<CVUniverse, MichelEvent>(true, false));
+  MnvTunev1.emplace_back(new PlotUtils::LowRecoil2p2hReweighter<CVUniverse, MichelEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::MINOSEfficiencyReweighter<CVUniverse, MichelEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::RPAReweighter<CVUniverse, MichelEvent>());
   
   PlotUtils::Model<CVUniverse, MichelEvent> model(std::move(MnvTunev1));
 
   // Make a map of systematic universes
   // Leave out systematics when making validation histograms
   //const bool doSystematics = (getenv("MNV101_SKIP_SYST") == nullptr); 
-  const bool doSystematics = false; //hard coding to false for now, we'll get to those eventually (carlos p, nov 2023)
+  //const bool doSystematics = false; //hard coding to false for now, we'll get to those eventually (carlos p, nov 2023)
+  const bool doSystematics = true; 
   if(!doSystematics){
     std::cout << "Skipping systematics (except 1 flux universe) because environment variable MNV101_SKIP_SYST is set.\n";
     PlotUtils::MinervaUniverse::SetNFluxUniverses(2); //Necessary to get Flux integral later...  Doesn't work with just 1 flux universe though because _that_ triggers "spread errors".
   }
 
   std::map< std::string, std::vector<CVUniverse*> > error_bands;
-  if(doSystematics) error_bands = GetStandardSystematics(options.m_mc);
+  //defined in ./NuE_TKI/systematics/Systematics.h
+  //if(doSystematics) error_bands = GetStandardSystematics(options.m_mc);
+  if(doSystematics) error_bands = GetNueTKISystematics(options.m_mc);
   else{
     std::map<std::string, std::vector<CVUniverse*> > band_flux = PlotUtils::GetFluxSystematicsMap<CVUniverse>(options.m_mc, CVUniverse::GetNFluxUniverses());
     error_bands.insert(band_flux.begin(), band_flux.end()); //Necessary to get flux integral later...
   }
   error_bands["cv"] = {new CVUniverse(options.m_mc)};
   std::map< std::string, std::vector<CVUniverse*> > truth_bands;
-  if(doSystematics) truth_bands = GetStandardSystematics(options.m_truth);
+  if(doSystematics) { truth_bands = GetStandardSystematics(options.m_truth); }
+  //ExtractCrossSection throws an error when you run without systematics
+  //Because it can't divide effNum/effDenom, as effDenom doesn't have a flux error band. So just adding this here. 
+  if(!doSystematics) {
+    std::map<std::string, std::vector<CVUniverse*> > band_flux = PlotUtils::GetFluxSystematicsMap<CVUniverse>(options.m_truth, CVUniverse::GetNFluxUniverses());
+    truth_bands.insert(band_flux.begin(), band_flux.end());
+  }
   truth_bands["cv"] = {new CVUniverse(options.m_truth)};
   
   //Carlos: I should clean this up at some point
@@ -596,24 +602,30 @@ int main(const int argc, const char** argv)
 		      protonAngleBins = {0,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180},
                       phiAngleBins = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100},
                       deltaPtXBins = {-2, -1.8, -1.6, -1.4, -1.2,-1,-0.8,-0.6,-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2},
+                      T_p_bins = {0,100,200,300,400,500,600,700,800,900,1000}, 
                       electronEnergyBins = {0.0,0.5,1.0,1.5,2,2.5,3.0,3.5,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,20};
                       //electronEnergyBins = {0.0,0.25,0.5,0.75,1.0,1.25,1.5,1.75,2,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,9,10,12.5,15,17.5,20};
   
   std::vector<Variable*> vars = {
     //Reco variables
-    new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
+    new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElectronEnergyTrue),
     new Variable("E_avail", "E_{avail} [GeV]", EavailBins, &CVUniverse::GetEavail, &CVUniverse::GetEavailTrue),
+    new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
     new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", Pt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue),
-    new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElepTrueGeV),
-    new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetEnuTrue),    
-    new Variable("RecoProtonP", "P_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),    
-    new Variable("RecoProtonTheta", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonThetaDeg, &CVUniverse::GetProtonThetaTrue),    
+    new Variable("Lepton_Pl", "p_{|,e} [GeV/c]", Pt_bins, &CVUniverse::GetElectronPParallel, &CVUniverse::GetElectronPParallelTrue),
+    new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetElectronThetaDegTrue),    
+    new Variable("Proton_p", "p_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),
+    new Variable("Proton_Pt", "p_{T,p} [GeV/c]", Pt_bins, &CVUniverse::GetProtonPt, &CVUniverse::GetProtonPtTrue),
+    new Variable("Proton_Pl", "p_{|,p} [GeV/c]", Pt_bins, &CVUniverse::GetProtonPParallel, &CVUniverse::GetProtonPParallelTrue),
+    new Variable("Theta_p", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonThetaDeg, &CVUniverse::GetProtonThetaDegTrue),    
+    new Variable("Sum_T_proton", "#Sigma #T_{p} [MeV]", T_p_bins, &CVUniverse::GetSumProtonT, &CVUniverse::GetSumProtonTTrue), 
+
     //tki vars start here
-    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", Pt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDummyVar),
-    new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDummyVar),//these 2 are wrong, for sure
-    new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDummyVar),//
-    new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetDummyVar),
-    new Variable("PhiPt", "#delta#phi_{T} [deg]", phiAngleBins, &CVUniverse::GetPhiT, &CVUniverse::GetDummyVar),
+    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", Pt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDeltaPtTrue),
+    new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDeltaPtXTrue),
+    new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDeltaPtYTrue),
+    new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetAlphaTTrue),
+    new Variable("PhiPt", "#delta#phi_{T} [deg]", phiAngleBins, &CVUniverse::GetPhiT, &CVUniverse::GetPhiTTrue),
     
     //true variables
     //new Variable("E_lep", "True Electron Energy", electronEnergyBins, &CVUniverse::GetElectronEnergyTrue, &CVUniverse::GetElectronEnergyTrue),
@@ -700,16 +712,18 @@ int main(const int argc, const char** argv)
   data_error_bands["cv"] = data_band;
   
   std::vector<Study*> data_studies;
+  data_studies.push_back(new MeanFrontDEDXSideband(vars, error_bands, truth_bands, data_band));
   data_studies.push_back(new MichelSideband(vars, error_bands, truth_bands, data_band));
+  //data_studies.push_back(new NIsoClusSideband(vars, error_bands, truth_bands, data_band));
+  //data_studies.push_back(new NPiSideband(vars, error_bands, truth_bands, data_band));
 
   
   std::vector<Study*> studies;
-  //studies.push_back(new EMShowerScoreSB(vars, error_bands, truth_bands, data_band));
+  //studies.push_back(new NIsoClusSideband(vars, error_bands, truth_bands, data_band));
+  studies.push_back(new MeanFrontDEDXSideband(vars, error_bands, truth_bands, data_band));
   studies.push_back(new MichelSideband(vars, error_bands, truth_bands, data_band));
-  //studies.push_back(new E_lep_SB(vars, error_bands, truth_bands, data_band));
-  //studies.push_back(new ModEAvailSB(vars, error_bands, truth_bands, data_band));
-  //studies.push_back(new MeanFrontDEDX_SB(vars, error_bands, truth_bands, data_band));
-  //studies.push_back(new ESC_SB(vars, error_bands, truth_bands, data_band));
+  //studies.push_back(new NPiSideband(vars, error_bands, truth_bands, data_band));
+
 
   for(auto& var: vars) var->InitializeMCHists(error_bands, truth_bands);
   for(auto& var: vars) var->InitializeDATAHists(data_band);
@@ -718,8 +732,10 @@ int main(const int argc, const char** argv)
   for(auto& var: vars2D) var->InitializeDATAHists(data_band);
 
   //This is for my saved output trees, just make sure it matches the elements of "studies"
+  //don't need to worry about it if not writing output tree
   //std::vector<std::string> sidebandNames = {"Signal_Region"};
-  std::vector<std::string> sidebandNames = {"Signal_Region", "Michel_Sideband"};
+  std::vector<std::string> sidebandNames = {"Signal_Region", "MeanFrontDEDX_Sideband", "Michel_Sideband"};
+  //std::vector<std::string> sidebandNames = {"Signal_Region", "MeanFrontDEDX_Sideband", "Michel_Sideband", "NIsoClus_Sideband", "NPi_Sideband"};
   //std::vector<std::string> sidebandNames = {"passes_precuts"};
 
   //Initialize my output tree stuff. if write_tree is false I still get an instance of the class, but it doesn't really do much or add any complexity/time  
