@@ -1,0 +1,12 @@
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119827_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119828_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119829_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119830_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119831_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119832_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119833_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119834_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119835_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119836_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119837_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1P/MasterAnaDev_mc_AnaTuple_run00119838_Playlist.root

@@ -1,0 +1,1 @@
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/CCDiffractivePion/Playlist1C/MasterAnaDev_mc_AnaTuple_run00111030_Playlist.root

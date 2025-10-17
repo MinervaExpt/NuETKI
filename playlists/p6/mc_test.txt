@@ -1,1 +1,0 @@
-/pnfs/minerva/persistent/DataPreservation/p6/FullDetector/Merged_mc_ana_me1A_DualVertex_p6/MasterAnaDev_mc_AnaTuple_run00110000_Playlist.root

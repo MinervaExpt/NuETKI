@@ -1,0 +1,4 @@
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1L/MasterAnaDev_mc_AnaTuple_run00119574_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1L/MasterAnaDev_mc_AnaTuple_run00119575_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1L/MasterAnaDev_mc_AnaTuple_run00119576_Playlist.root
+root://fndca1.fnal.gov:1095/pnfs/fnal.gov/usr/minerva/persistent/OpenData/MediumEnergy_FHC/MC/DSCalorimeters/Playlist1L/MasterAnaDev_mc_AnaTuple_run00119577_Playlist.root
