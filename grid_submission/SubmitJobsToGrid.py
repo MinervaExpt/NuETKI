@@ -22,11 +22,11 @@ def writeEventLoop(mywrapper,outdir,playlist,pdg,filename):
     #mywrapper.write("./Event_Selection_Tracker_anyMode . "+playlist+" "+pdg+" "+str(filename))
 
     #Determine playlist from input...
-    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mad_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mad_mc_"+playlist+".txt |& tee CutSummary.txt")
+    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_mc_"+playlist+".txt |& tee CutSummary.txt")
 
     
     #one run of data and MC each, for testing
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/data_test.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mc_test.txt |& tee CutSummary.txt")
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_data.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_mc.txt |& tee CutSummary.txt")
     
     #same as above just different runs, for cross checking
     #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/data_test_2.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mc_test_2.txt")
@@ -49,7 +49,7 @@ def writeEventLoop(mywrapper,outdir,playlist,pdg,filename):
     mywrapper.write("ifdh cp ./*.root "+outdir)
     #Carlos added so I could get my cut summary
     mywrapper.write("\n")
-    mywrapper.write("ifdh cp ./CutSummary.txt "+outdir+"/CutSummary_"+playlist+".txt")
+    mywrapper.write("ifdh cp ./CutSummary.txt "+outdir)
 
 def writeMigration(mywrapper,outdir,playlist,pdg,filename):
     mywrapper.write("./Migration_Tracker_anyMode . "+playlist+" "+pdg+" "+str(filename))
@@ -271,7 +271,7 @@ if opts.mail:
 #cmd += "--subgroup=Nightly " #This is only for high priority jobs
 #cmd += "--resource-provides=usage_model=DEDICATED,OPPORTUNISTIC " 
 cmd += "--role=Analysis " 
-cmd += "--expected-lifetime 8h "  #normally 6h 
+cmd += "--expected-lifetime 24h "  #normally 6h 
 #cmd += "--cpu 0.25"
 #cmd += "--memory "+str(memory)+"MB " 
 #cmd += "--disk "+str(disk)+"GB " #added in May20 b/c jobs going to 'held'
