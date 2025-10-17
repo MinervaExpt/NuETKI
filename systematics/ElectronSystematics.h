@@ -27,3 +27,4 @@ namespace PlotUtils{
     virtual bool IsVerticalOnly()  const  { return false; }/*override*/
   };
 }
+#endif // ELECTRONSYSTEMATICS_H
