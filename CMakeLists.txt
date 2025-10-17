@@ -66,7 +66,7 @@ add_subdirectory(util)
 #add_subdirectory(event)
 #add_subdirectory(cuts)
 #add_subdirectory(studies)
-#add_subdirectory(systematics)
+add_subdirectory(systematics)
 
 #Build main executables
 add_executable(runEventLoop runEventLoop.cpp)
@@ -80,6 +80,10 @@ install(TARGETS ExtractCrossSection DESTINATION bin)
 add_executable(runXSecLooper runXSecLooper.cpp)
 target_link_libraries(runXSecLooper ${ROOT_LIBRARIES} MAT GENIEXSecExtract)
 install(TARGETS runXSecLooper DESTINATION bin)
+
+add_executable(FitBackgrounds FitBackgrounds.cpp)
+target_link_libraries(FitBackgrounds ${ROOT_LIBRARIES} util MAT UnfoldUtils)
+install(TARGETS FitBackgrounds DESTINATION bin)
 
 install(FILES backgroundStack.py PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE DESTINATION bin)
 
