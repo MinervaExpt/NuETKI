@@ -71,27 +71,27 @@ void truthStudies() {
 
   //MAT reco cuts for reference
   /*  
-  preCuts.emplace_back(new reco::HasTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NoVertexMismatch<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::HasTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NoVertexMismatch<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, CCNuEEvent>());
 
-  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, MichelEvent>(1, "Deadtime"));
+  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, CCNuEEvent>(1, "Deadtime"));
 
-  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, CCNuEEvent>());
 
-  preCuts.emplace_back(new reco::ZRange<CVUniverse, MichelEvent>("Tracker", minZ, maxZ));
-  preCuts.emplace_back(new reco::Apothem<CVUniverse, MichelEvent>(apothem));
-  preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::ZRange<CVUniverse, CCNuEEvent>("Tracker", minZ, maxZ));
+  preCuts.emplace_back(new reco::Apothem<CVUniverse, CCNuEEvent>(apothem));
+  preCuts.emplace_back(new reco::Eavailable<CVUniverse, CCNuEEvent>());
 
-  preCuts.emplace_back(new reco::ProtonEnd<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::ProtonEnd<CVUniverse, CCNuEEvent>());
   */
 
   //Reco branches

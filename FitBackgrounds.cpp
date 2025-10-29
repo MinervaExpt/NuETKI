@@ -1,26 +1,53 @@
-// FitBackgrounds_fromPython_fixed.cpp
-// Converted from your scale_factors_test.py and adjusted to:
-//  - compute scale factors identical to the python script
-//  - make only three plots: meanFront sideband, michel sideband, and final signal region
-//  - write signal-region scaled MC histograms (with same names) into scaled_mc.root
+// FitBackgrounds.cpp
+// Takes as input root files from runEventLoop containing signal samples and sideband samples of meanfront dE/dX and >= 1 michel events.
+// Calculates scale factors (with multiple options how), creates plots of scale factors, scaled sidebands, scaled signal
+// And saves the scaled signal region to a new root file, to be used in ExtractCrossSection.cpp
 //
 // Usage (example):
-//   root -l -b -q 'FitBackgrounds_fromPython_fixed.cpp("data.root","mc.root",3,"DeltaPt")'
+//   root -l -b -q 'FitBackgrounds.cpp("data.root","mc.root",3,"DeltaPt")'
 //
-// Notes:
-//  - Requires PlotUtils (MnvH1D, MnvPlotter) available to ROOT/CINT (ROOT_INCLUDE_PATH etc).
-//  - Compiles in cling / ROOT JIT (works as a ROOT macro). If you prefer a compiled binary, integrate
-//    into your build system and link the same libraries.
-
-#include "util/GetIngredient.h"
-
+// To do: write the scale factors to the histogram (or somewhere), so I can just know what they are???
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Woverloaded-virtual"
+
+
+//Includes from this package
+#include "event/CVUniverse.h"
+#include "event/CCNuEEvent.h"
+#include "systematics/Systematics.h"
+#include "cuts/MaxPzMu.h"
+#include "util/Variable.h"
+#include "util/Variable2D.h"
+#include "util/GetFluxIntegral.h"
+#include "util/GetPlaylist.h"
+#include "util/GetIngredient.h"
+#include "cuts/SignalDefinition.h"
+#include "cuts/q3RecoCut.h"
+#include "cuts/NuETKICuts.h"
+#include "cuts/NuETKISignal.h"
+//#include "Binning.h" //TODO: Fix me
+
+//PlotUtils includes
 #include "MinervaUnfold/MnvUnfold.h"
 #include "PlotUtils/MnvH1D.h"
 #include "PlotUtils/MnvPlotter.h"
+#include "PlotUtils/makeChainWrapper.h"
+#include "PlotUtils/HistWrapper.h"
+#include "PlotUtils/Hist2DWrapper.h"
+#include "PlotUtils/MacroUtil.h"
+#include "PlotUtils/MnvPlotter.h"
+#include "PlotUtils/CrashOnROOTMessage.h" //Sets up ROOT's debug callbacks by itself
+#include "PlotUtils/Cutter.h"
+#include "PlotUtils/Model.h"
+#include "PlotUtils/FluxAndCVReweighter.h"
+#include "PlotUtils/GENIEReweighter.h"
+#include "PlotUtils/LowRecoil2p2hReweighter.h"
+#include "PlotUtils/RPAReweighter.h"
+#include "PlotUtils/MINOSEfficiencyReweighter.h"
+#include "PlotUtils/TargetUtils.h"
 #pragma GCC diagnostic pop
 
+//ROOT includes
 #include "TH1D.h"
 #include "TFile.h"
 #include "TKey.h"
@@ -34,11 +61,11 @@
 #include <TMatrixD.h>
 #include <TVectorD.h>
 #include <TDecompSVD.h>
-
 #ifndef NCINTEX
 #include "Cintex/Cintex.h"
 #endif
 
+//c++ includes
 #include <iostream>
 #include <vector>
 #include <string>
@@ -53,6 +80,7 @@ struct ScaleFactors {
   std::vector<double> michelSig;
 };
 
+//This is the version with NO regularization whatsoever
 ScaleFactors ExtractScaleFactors(
     const std::vector<PlotUtils::MnvH1D*>& data_hists,
     const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists,
@@ -302,7 +330,7 @@ ScaleFactors ExtractScaleFactorsWithReg(
 void CopyObjectsWithPrefix(const char* inputFilePath,
                                    TFile* outFile,
                                    const std::vector<std::string>& skipNames,
-                                   const std::string& prefix = "DeltaPt_")
+                                   const std::string& prefix = "Lepton_Pt_")
 {
   TFile* in = TFile::Open(inputFilePath, "READ");
   if (!in || in->IsZombie()) {
@@ -397,14 +425,14 @@ int main(int argc, char** argv) {
   TH1::AddDirectory(kFALSE); // avoid ownership issues with ROOT directories
 
   if (argc < 3) {
-    std::cerr << "USAGE: " << argv[0] << " <data.root> <mc.root> [rebinFactor=3] [variableName=DeltaPt]\n";
+    std::cerr << "USAGE: " << argv[0] << " <data.root> <mc.root> [rebinFactor=1] [variableName=Lepton_Pt]\n";
     return 1;
   }
 
   const char* dataPath = argv[1];
   const char* mcPath   = argv[2];
-  int rebinFactor = 3;
-  std::string varName = "DeltaPt";
+  int rebinFactor = 1;
+  std::string varName = "Lepton_Pt";
   if (argc >= 4) rebinFactor = std::stoi(argv[3]);
   if (argc >= 5) varName = argv[4];
 
@@ -448,7 +476,6 @@ int main(int argc, char** argv) {
   plotter.legend_text_size = 0.015;
   plotter.data_line_width = 2;
   plotter.data_marker_size = 1.5;
-  plotter.draw_normalized_to_bin_width = 0;
 
   // MC colors (same order used in Python)
   const std::vector<int> mcColors = {4, 7, 6, 2, 5, 416};
@@ -509,15 +536,27 @@ int main(int argc, char** argv) {
     }
   }
 
-  double lambda = 1000;
+  //double lambda = 0;
+  double lambda = 10000000000;
   //ScaleFactors sfs = ExtractScaleFactors(data_hists, mc_hists, mcScale);
   ScaleFactors sfs = ExtractScaleFactorsWithReg(data_hists, mc_hists, mcScale, lambda);
+
+  //This is if I just wanna make the plots without any bkg scaling, ie, all scale factors are 1
   //ScaleFactors sfs;
   //sfs.meanFrontBkg.resize(nbins, 1.0);
   //sfs.meanFrontSig.resize(nbins, 1.0);
   //sfs.michelBkg.resize(nbins, 1.0);
   //sfs.michelSig.resize(nbins, 1.0);
 
+  std::cout << "mean front bkg scale factors: " << std::endl;
+  for (double sf : sfs.meanFrontBkg){
+    std::cout << "    " << sf << std::endl;
+  }
+  std::cout << "michel bkg scale factors: " << std::endl;
+  for (double sf : sfs.michelBkg){
+    std::cout << "    " << sf << std::endl;
+  }
+  
   // Make scale factor histograms
   auto makeSFhist = [&](const std::string& name, const std::vector<double>& vals) -> PlotUtils::MnvH1D* {
     PlotUtils::MnvH1D* h = dynamic_cast<PlotUtils::MnvH1D*>(data_hists[0]->Clone(name.c_str()));
@@ -624,12 +663,19 @@ int main(int argc, char** argv) {
   //     scale categories 3 and 4 (NCPi0 and CCnumuPi0) with MEANFRONT bkg SF,
   //     leave signal (cat 0) UNCHANGED.
   // ---------------------------
+  // Update, had to make some changes here. Reset("ICES") and SetBinContent do bad things, and don't propagate changes to universes.
+  //Instead leave the clones as are, and MultiplySingle() by the scale factor histograms
   std::vector<PlotUtils::MnvH1D*> finalSignalScaled(bkgdCategoryNames.size(), nullptr);
   for (size_t c = 0; c < bkgdCategoryNames.size(); ++c) {
     PlotUtils::MnvH1D* base = mc_hists[c][0];
     PlotUtils::MnvH1D* clone = dynamic_cast<PlotUtils::MnvH1D*>(base->Clone((std::string(base->GetName())+std::string("_finalScaled")).c_str()));
     clone->SetDirectory(nullptr);
-    clone->Reset("ICES");
+    if (c == 1){
+      clone->MultiplySingle(clone, mic_bkg_h);
+    } else if (c == 3 || c == 4) {
+      clone->MultiplySingle(clone, mean_bkg_h);
+    }
+    /*
     for (int ib = 1; ib <= nbins; ++ib) {
       double oldc = base->GetBinContent(ib);
       double olde = base->GetBinError(ib);
@@ -650,7 +696,7 @@ int main(int argc, char** argv) {
       }
       clone->SetBinContent(ib, newc);
       clone->SetBinError(ib, newe);
-    }
+      }*/
     finalSignalScaled[c] = clone;
   }
 
@@ -687,8 +733,7 @@ int main(int argc, char** argv) {
     TCanvas c("c", titleSuffix.c_str(), 1200, 900);
     //plotter.DrawDataStackedMC(data_hists[s], &arr, nullptr, mcScale, "TR", "Data", 1001, data_hists[0]->GetXaxis()->GetTitle(), "N events");
     plotter.DrawDataStackedMC(data, &array, arr, mcScale, "TR", "Data", 1001, data->GetXaxis()->GetTitle(), "N events");
-    std::string normalization = std::string("Normalized to ") + std::to_string(dataPOT) + " data POT";
-    plotter.AddPlotLabel(normalization.c_str(), 0.2, 0.95, 0.03);
+    plotter.AddPOTNormBox(dataPOT, mcPOT, 0.3, 0.85);
     c.SaveAs(outName.c_str());
   };
 
@@ -711,17 +756,17 @@ int main(int argc, char** argv) {
   } else {
     // for each category, write the scaled histogram but give it the original name (mc_hists[c][0]->GetName())
     std::vector<std::string> modifiedNames = {
-      "DeltaPt_selected_signal_reco",
-      "DeltaPt_background_NuECC_with_pions",
-      "DeltaPt_background_Other_NueCC",
-      "DeltaPt_background_NC_pi0",
-      "DeltaPt_background_CC_Numu_pi0",
-      "DeltaPt_background_Other"
+      "Lepton_Pt_selected_signal_reco",
+      "Lepton_Pt_background_NuECC_with_pions",
+      "Lepton_Pt_background_Other_NueCC",
+      "Lepton_Pt_background_NC_pi0",
+      "Lepton_Pt_background_CC_Numu_pi0",
+      "Lepton_Pt_background_Other"
       // ... add any other names you've modified/written ...
     };
-    // Copy all other objects from the mc input with prefix "DeltaPt_"
+    // Copy all other objects from the mc input with prefix "Lepton_Pt_"
     // (preserving key names), and copy POTUsed/TParameter(POT*) as well.
-    CopyObjectsWithPrefix(mcPath, outFile, modifiedNames, "DeltaPt_");
+    CopyObjectsWithPrefix(mcPath, outFile, modifiedNames, "Lepton_Pt_");
 
     for (size_t c = 0; c < bkgdCategoryNames.size(); ++c) {
       // clone finalSignalScaled[c] and set name to the original MC histogram name for signal-region

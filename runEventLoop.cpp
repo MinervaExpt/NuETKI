@@ -47,7 +47,7 @@ enum ErrorCodes
 
 //Includes from this package
 #include "event/CVUniverse.h"
-#include "event/MichelEvent.h"
+#include "event/CCNuEEvent.h"
 #include "systematics/Systematics.h"
 #include "cuts/MaxPzMu.h"
 #include "util/Variable.h"
@@ -97,7 +97,7 @@ enum ErrorCodes
 #include <iomanip>
 
 
-OutputTreeManager g_OutputTreeManager; //defining my output tree manager (struct declaration and full def in MichelEvent.h)
+OutputTreeManager g_OutputTreeManager; //defining my output tree manager (struct declaration and full def in CCNuEEvent.h)
 
 //==============================================================================
 // Loop and Fill
@@ -108,8 +108,8 @@ void LoopAndFillEventSelection(
     std::vector<Variable*> vars,
     std::vector<Variable2D*> vars2D,
     std::vector<Study*> studies,
-    PlotUtils::Cutter<CVUniverse, MichelEvent>& michelcuts,
-    PlotUtils::Model<CVUniverse, MichelEvent>& model)
+    PlotUtils::Cutter<CVUniverse, CCNuEEvent>& michelcuts,
+    PlotUtils::Model<CVUniverse, CCNuEEvent>& model)
 {
   assert(!error_bands["cv"].empty() && "\"cv\" error band is empty!  Can't set Model weight.");
   auto& cvUniv = error_bands["cv"].front();
@@ -122,7 +122,7 @@ void LoopAndFillEventSelection(
   {
     if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
 
-    MichelEvent cvEvent;
+    CCNuEEvent cvEvent;
     cvUniv->SetEntry(i);
     model.SetEntry(*cvUniv, cvEvent);
     const double cvWeight = model.GetWeight(*cvUniv, cvEvent);
@@ -135,7 +135,7 @@ void LoopAndFillEventSelection(
       std::vector<CVUniverse*> error_band_universes = band.second;
       for (auto universe : error_band_universes)
       {
-        MichelEvent myevent; // make sure your event is inside the error band loop. 
+        CCNuEEvent myevent; // make sure your event is inside the error band loop. 
     
         // Tell the Event which entry in the TChain it's looking at
         universe->SetEntry(i);
@@ -242,7 +242,7 @@ void LoopAndFillData( PlotUtils::ChainWrapper* data,
 				std::vector<Variable*> vars,
                                 std::vector<Variable2D*> vars2D,
                                 std::vector<Study*> studies,
-				PlotUtils::Cutter<CVUniverse, MichelEvent>& michelcuts)
+				PlotUtils::Cutter<CVUniverse, CCNuEEvent>& michelcuts)
 
 {
   std::cout << "Starting data loop...\n";
@@ -251,7 +251,7 @@ void LoopAndFillData( PlotUtils::ChainWrapper* data,
     for (auto universe : data_band) {
       universe->SetEntry(i);
       if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
-      MichelEvent myevent;
+      CCNuEEvent myevent;
       
       //if (!michelcuts.isDataSelected(*universe, myevent).all()) continue;
       std::bitset<64> cut_results = michelcuts.isDataSelected(*universe, myevent);  
@@ -285,8 +285,8 @@ void LoopAndFillEffDenom( PlotUtils::ChainWrapper* truth,
     				std::map<std::string, std::vector<CVUniverse*> > truth_bands,
     				std::vector<Variable*> vars,
                                 std::vector<Variable2D*> vars2D,
-    				PlotUtils::Cutter<CVUniverse, MichelEvent>& michelcuts,
-                                PlotUtils::Model<CVUniverse, MichelEvent>& model)
+    				PlotUtils::Cutter<CVUniverse, CCNuEEvent>& michelcuts,
+                                PlotUtils::Model<CVUniverse, CCNuEEvent>& model)
 {
   assert(!truth_bands["cv"].empty() && "\"cv\" error band is empty!  Could not set Model entry.");
   auto& cvUniv = truth_bands["cv"].front();
@@ -297,7 +297,7 @@ void LoopAndFillEffDenom( PlotUtils::ChainWrapper* truth,
   {
     if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
 
-    MichelEvent cvEvent;
+    CCNuEEvent cvEvent;
     cvUniv->SetEntry(i);
     model.SetEntry(*cvUniv, cvEvent);
     const double cvWeight = model.GetWeight(*cvUniv, cvEvent);
@@ -310,7 +310,7 @@ void LoopAndFillEffDenom( PlotUtils::ChainWrapper* truth,
       std::vector<CVUniverse*> truth_band_universes = band.second;
       for (auto universe : truth_band_universes)
       {
-        MichelEvent myevent; //Only used to keep the Model happy
+        CCNuEEvent myevent; //Only used to keep the Model happy
 
         // Tell the Event which entry in the TChain it's looking at
         universe->SetEntry(i);
@@ -455,8 +455,8 @@ int main(const int argc, const char** argv)
 
   //CUTS DEFINED HERE! reco_t and truth_t are just vectors of Cut objects (from MAT), emplace_back just adds something to the end of the vector
   //So I guess reco:: and truth:: are just types of Cuts? -> they are namespaces in CCInclusiveCuts.h and CCInclusiveSignal.h respectively...
-  PlotUtils::Cutter<CVUniverse, MichelEvent>::reco_t sidebands, preCuts;
-  PlotUtils::Cutter<CVUniverse, MichelEvent>::truth_t signalDefinition, phaseSpace;
+  PlotUtils::Cutter<CVUniverse, CCNuEEvent>::reco_t sidebands, preCuts;
+  PlotUtils::Cutter<CVUniverse, CCNuEEvent>::truth_t signalDefinition, phaseSpace;
 
   //So I guess the question is, what are these reco:: and truth:: namespaces? because cuts are defined as members of those...
   const double minZ = 5980, maxZ = 8422, apothem = 850; //All in mm
@@ -480,67 +480,67 @@ int main(const int argc, const char** argv)
   //ie do not allow any events with blobs that start more than -x mm upstream of vtx
   
   //"precuts"
-  preCuts.emplace_back(new reco::HasTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NoVertexMismatch<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::ZRange<CVUniverse, MichelEvent>("Vertex in Tracker", minZ, maxZ));
-  preCuts.emplace_back(new reco::Apothem<CVUniverse, MichelEvent>(apothem));
-  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, MichelEvent>(minFirstFireFraction));
-  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, MichelEvent>(1, "Deadtime"));
-  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, MichelEvent>(maxDSCalRatio));
-  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, MichelEvent>(maxSideCalRatio));
-  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, MichelEvent>(minVertexTrackMultiplicity, maxVertexTrackMultiplicity));
-  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, MichelEvent>(minTransverseGapScore));
-  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, MichelEvent>(minNonMIPClusFrac));
+  preCuts.emplace_back(new reco::HasTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NoVertexMismatch<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::ZRange<CVUniverse, CCNuEEvent>("Vertex in Tracker", minZ, maxZ));
+  preCuts.emplace_back(new reco::Apothem<CVUniverse, CCNuEEvent>(apothem));
+  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, CCNuEEvent>(minFirstFireFraction));
+  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, CCNuEEvent>(1, "Deadtime"));
+  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, CCNuEEvent>(maxDSCalRatio));
+  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, CCNuEEvent>(maxSideCalRatio));
+  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, CCNuEEvent>(minVertexTrackMultiplicity, maxVertexTrackMultiplicity));
+  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, CCNuEEvent>(minTransverseGapScore));
+  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, CCNuEEvent>(minNonMIPClusFrac));
   
   //not technically sidebands, but maybe more sophisticated/specific cuts
-  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>(minEMTrackScore));
-  //preCuts.emplace_back(new reco::MichelCut<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>(maxMeanFrontDEDX));
-  preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, MichelEvent>(minElectronEnergy));
-  preCuts.emplace_back(new reco::ModifiedEavailable<CVUniverse, MichelEvent>(maxModifiedEAvail));
+  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, CCNuEEvent>(minEMTrackScore));
+  //preCuts.emplace_back(new reco::MichelCut<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, CCNuEEvent>(maxMeanFrontDEDX));
+  preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, CCNuEEvent>(minElectronEnergy));
+  preCuts.emplace_back(new reco::ModifiedEavailable<CVUniverse, CCNuEEvent>(maxModifiedEAvail));
 
   //This is reduntant, but separating them helps to see the effect of requiring a proton track vs the actual chi^2 / esc node cut effects
-  preCuts.emplace_back(new reco::ProtonInEvent<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NIsoBlobs<CVUniverse, MichelEvent>(maxNIsoBlobs));
-  //preCuts.emplace_back(new reco::IsoBlobEnergy<CVUniverse, MichelEvent>(maxIsoBlobEnergy));
-  //preCuts.emplace_back(new reco::UpstreamIsoBlob<CVUniverse, MichelEvent>(furthestUpstreamIsoBlobStartZ));
-  preCuts.emplace_back(new reco::ESC<CVUniverse, MichelEvent>(maxESCChi2));
+  preCuts.emplace_back(new reco::ProtonInEvent<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NIsoBlobs<CVUniverse, CCNuEEvent>(maxNIsoBlobs));
+  //preCuts.emplace_back(new reco::IsoBlobEnergy<CVUniverse, CCNuEEvent>(maxIsoBlobEnergy));
+  //preCuts.emplace_back(new reco::UpstreamIsoBlob<CVUniverse, CCNuEEvent>(furthestUpstreamIsoBlobStartZ));
+  preCuts.emplace_back(new reco::ESC<CVUniverse, CCNuEEvent>(maxESCChi2));
   
   //older / obsolete cuts
-  //preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ProtonMomentum<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::Psi<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ProtonTheta<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ElectronPt<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::EleptonSin2Theta<CVUniverse, MichelEvent>());
-  //preCuts.emplace_back(new reco::ProtonInEvent<CVUniverse, MichelEvent>());  
+  //preCuts.emplace_back(new reco::Eavailable<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::ProtonMomentum<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::Psi<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::ProtonTheta<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::ElectronPt<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::EleptonSin2Theta<CVUniverse, CCNuEEvent>());
+  //preCuts.emplace_back(new reco::ProtonInEvent<CVUniverse, CCNuEEvent>());  
 
   //Hangs cuts exactly, when I want to run that selection
   /*
-  preCuts.emplace_back(new reco::HasTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, MichelEvent>(1, "Deadtime"));
-  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::ZRange<CVUniverse, MichelEvent>("Tracker", minZ, maxZ));
-  preCuts.emplace_back(new reco::Apothem<CVUniverse, MichelEvent>(apothem));
-  preCuts.emplace_back(new reco::Eavailable<CVUniverse, MichelEvent>());
-  preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, MichelEvent>());
+  preCuts.emplace_back(new reco::HasTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::HasNoBackExitingTracks<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::EMLikeTrackScore<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::DSCalVisE<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::ODCalVisE<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::VertexTrackMultiplicity<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::Afterpulsing<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NoDeadtime<CVUniverse, CCNuEEvent>(1, "Deadtime"));
+  preCuts.emplace_back(new reco::StartPointVertexMultiplicity<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::MeanFrontdEdX<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::NonMIPClusterFraction<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::TransverseGapScore<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::ZRange<CVUniverse, CCNuEEvent>("Tracker", minZ, maxZ));
+  preCuts.emplace_back(new reco::Apothem<CVUniverse, CCNuEEvent>(apothem));
+  preCuts.emplace_back(new reco::Eavailable<CVUniverse, CCNuEEvent>());
+  preCuts.emplace_back(new reco::ElectronEnergy<CVUniverse, CCNuEEvent>());
   */
 
   //Sidebands
-  sidebands.emplace_back(new reco::MeanFrontdEdX<CVUniverse, MichelEvent>(maxMeanFrontDEDX));
-  sidebands.emplace_back(new reco::MichelCut<CVUniverse, MichelEvent>());
-  //sidebands.emplace_back(new reco::NIsoBlobs<CVUniverse, MichelEvent>(maxNIsoBlobs));
+  sidebands.emplace_back(new reco::MeanFrontdEdX<CVUniverse, CCNuEEvent>(maxMeanFrontDEDX));
+  sidebands.emplace_back(new reco::MichelCut<CVUniverse, CCNuEEvent>());
+  //sidebands.emplace_back(new reco::NIsoBlobs<CVUniverse, CCNuEEvent>(maxNIsoBlobs));
 
   //Hang also has a "hits nucleus" requirement in his signal definition, whats the best way to implement that...?
   signalDefinition.emplace_back(new truth::IsNue<CVUniverse>());
@@ -554,17 +554,17 @@ int main(const int argc, const char** argv)
   phaseSpace.emplace_back(new truth::ZRange<CVUniverse>("Tracker", minZ, maxZ));
   phaseSpace.emplace_back(new truth::Apothem<CVUniverse>(apothem));
 
-  PlotUtils::Cutter<CVUniverse, MichelEvent> mycuts(std::move(preCuts), std::move(sidebands) , std::move(signalDefinition),std::move(phaseSpace));
+  PlotUtils::Cutter<CVUniverse, CCNuEEvent> mycuts(std::move(preCuts), std::move(sidebands) , std::move(signalDefinition),std::move(phaseSpace));
 
-  std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, MichelEvent>>> MnvTunev1;
+  std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, CCNuEEvent>>> MnvTunev1;
 
-  MnvTunev1.emplace_back(new PlotUtils::FluxAndCVReweighter<CVUniverse, MichelEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::GENIEReweighter<CVUniverse, MichelEvent>(true, false));
-  MnvTunev1.emplace_back(new PlotUtils::LowRecoil2p2hReweighter<CVUniverse, MichelEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::MINOSEfficiencyReweighter<CVUniverse, MichelEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::RPAReweighter<CVUniverse, MichelEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::FluxAndCVReweighter<CVUniverse, CCNuEEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::GENIEReweighter<CVUniverse, CCNuEEvent>(true, false));
+  MnvTunev1.emplace_back(new PlotUtils::LowRecoil2p2hReweighter<CVUniverse, CCNuEEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::MINOSEfficiencyReweighter<CVUniverse, CCNuEEvent>());
+  MnvTunev1.emplace_back(new PlotUtils::RPAReweighter<CVUniverse, CCNuEEvent>());
   
-  PlotUtils::Model<CVUniverse, MichelEvent> model(std::move(MnvTunev1));
+  PlotUtils::Model<CVUniverse, CCNuEEvent> model(std::move(MnvTunev1));
 
   // Make a map of systematic universes
   // Leave out systematics when making validation histograms

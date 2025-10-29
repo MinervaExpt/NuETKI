@@ -1,12 +1,12 @@
 #include "studies/Study.h"
 #include "event/CVUniverse.h"
-#include "event/MichelEvent.h"
+#include "event/CCNuEEvent.h"
 #include "util/Variable.h"
 #include "PlotUtils/Cutter.h"
 
 #include "TDirectory.h"
 
-//class MichelEvent;
+//class CCNuEEvent;
 //class CVUniverse;
 
 class NPiSideband: public Study
@@ -43,22 +43,22 @@ class NPiSideband: public Study
   //The only problem with this is that I'll have to redefine the functions in the base Study.h class, because the event loop itself
   //uses pointers to the base class and not the specific sideband derived class... But this would be the same problem for every sideband/Study
   //so might be OK?
-    void SelectedMC(const CVUniverse& univ, const MichelEvent& evt, const double weight)
+    void SelectedMC(const CVUniverse& univ, const CCNuEEvent& evt, const double weight)
     {
       fillSelectedMC(univ, evt, weight);
     }
 
-    void SelectedData(const CVUniverse& univ, const MichelEvent& evt, const double weight)
+    void SelectedData(const CVUniverse& univ, const CCNuEEvent& evt, const double weight)
     {
       fillSelectedData(univ, evt, weight);
     }
     
-    void SelectedSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight)
+    void SelectedSignal(const CVUniverse& univ, const CCNuEEvent& evt, const double weight)
     {
       fillSelectedSignal(univ, evt, weight);
     }
 
-    void TruthSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight)
+    void TruthSignal(const CVUniverse& univ, const CCNuEEvent& evt, const double weight)
     {
       fillTruthSignal(univ, evt, weight);
     }
@@ -81,7 +81,7 @@ class NPiSideband: public Study
   private:
     using Hist = PlotUtils::HistWrapper<CVUniverse>;
 
-      void fillSelectedMC(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
+      void fillSelectedMC(const CVUniverse& univ, const CCNuEEvent& evt, const double weight) {
 	//std::cout << "Entering NPiSideband::fillSelectedMC" << std::endl;
 	//std::cout << "improved_nmichel = " << univ.GetImprovedNMichel() << std::endl;
 	//std::cout << "N Iso Clusters = " << univ.GetNIsoBlobs() << std::endl;
@@ -119,7 +119,7 @@ class NPiSideband: public Study
     }
 
 
-    void fillSelectedData(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
+    void fillSelectedData(const CVUniverse& univ, const CCNuEEvent& evt, const double weight) {
       for (auto& var: fVars){
 	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){
 	  var->dataHist->FillUniverse(&univ, var->GetRecoValue(univ), 1); //should never be weighting data
@@ -128,7 +128,7 @@ class NPiSideband: public Study
     }
 
   
-    void fillSelectedSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
+    void fillSelectedSignal(const CVUniverse& univ, const CCNuEEvent& evt, const double weight) {
       for (auto& var: fVars){
 	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){       
 	  var->selectedSignalReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
@@ -137,7 +137,7 @@ class NPiSideband: public Study
 
     }
 
-    void fillTruthSignal(const CVUniverse& univ, const MichelEvent& evt, const double weight) {
+    void fillTruthSignal(const CVUniverse& univ, const CCNuEEvent& evt, const double weight) {
       //std::cout << "carlos testing fillTruthSignal\n" << std::endl;
       for (auto& var: fVars){
 	if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() > 1){

@@ -1,5 +1,5 @@
-#ifndef MichelEvent_h
-#define MichelEvent_h
+#ifndef CCNuEEvent_h
+#define CCNuEEvent_h
 
 #include "event/CVUniverse.h"
 #include "TFile.h"
@@ -93,7 +93,7 @@ struct OutputTreeManager {
 
 extern OutputTreeManager g_OutputTreeManager;
 
-struct MichelEvent {
+struct CCNuEEvent {
     int m_idx; // Index for Best Michel in nmichels
     double m_bestdist; // in mm 
     std::vector<double> m_best2D; //0: XZ, 1: UZ, 2:VZ   
