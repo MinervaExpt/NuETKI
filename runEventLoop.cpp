@@ -1,11 +1,5 @@
-#define MC_OUT_FILE_NAME "MC_Oct_06.root"
-#define DATA_OUT_FILE_NAME "Data_Oct_06.root"
-#define MC_TUPLE_OUT_FILE_NAME "TUPLE_Oct_06.root"
-//#define MC_OUT_FILE_NAME "efficiencyTesting.root"
-//#define DATA_OUT_FILE_NAME "dummyData.root"
-
-//bool write_tree = true;
-bool write_tree = false;
+//Whether or not to save a TTree of my selected events (adds a lot of runtime if true)
+bool write_tree = false; //true;
 
 #define USAGE					\
 "\n*** USAGE ***\n"\
@@ -19,7 +13,7 @@ bool write_tree = false;
 "entries will be treated like data, and the second playlist's entries must\n"\
 "have the \"Truth\" tree to use for calculating the efficiency denominator.\n\n"\
 "*** Output ***\n"\
-"Produces a two files, " MC_OUT_FILE_NAME " and " DATA_OUT_FILE_NAME ", with\n"\
+"Produces a two files, a Data.root and an MC.root file, with\n"\
 "all histograms needed for the ExtractCrossSection program also built by this\n"\
 "package.  You'll need a .rootlogon.C that loads ROOT object definitions from\n"\
 "PlotUtils to access systematics information from these files.\n\n"\
@@ -60,11 +54,11 @@ enum ErrorCodes
 #include "util/Variable2D.h"
 #include "util/GetFluxIntegral.h"
 #include "util/GetPlaylist.h"
+#include "util/Binning.h" //TODO: Fix me
 #include "cuts/SignalDefinition.h"
 #include "cuts/q3RecoCut.h"
 #include "cuts/NuETKICuts.h"
 #include "cuts/NuETKISignal.h"
-//#include "Binning.h" //TODO: Fix me
 
 //Studies and sidebands
 #include "studies/Study.h"
@@ -99,8 +93,11 @@ enum ErrorCodes
 #include <iostream>
 #include <cstdlib> //getenv()
 #include <ctime>
+#include <sstream>
+#include <iomanip>
 
-OutputTreeManager g_OutputTreeManager; //defining my output tree manager (struct declaration and full def in MichelEvent.h
+
+OutputTreeManager g_OutputTreeManager; //defining my output tree manager (struct declaration and full def in MichelEvent.h)
 
 //==============================================================================
 // Loop and Fill
@@ -426,7 +423,16 @@ int main(const int argc, const char** argv)
     return badInputFile;
   }
 
-  const bool doCCQENuValidation = (reco_tree_name == "CCQENu"); //Enables extra histograms and might influence which systematics I use if the reco tree name is CCQENu...
+  //Get date & time for output file names
+  std::stringstream ss_1, ss_2, ss_3;
+  std::time_t t = std::time(nullptr);
+  std::tm tm = *std::localtime(&t);    
+  ss_1 << "MC_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  ss_2 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  ss_3 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  std::string mc_out_filename = ss_1.str();
+  std::string data_out_filename = ss_2.str();
+  std::string mc_tuple_out_filename = ss_3.str();
 
   //MacroUtil member variables are:
   //PlotUtils::ChainWrapper* m_data, m_mc, m_truth
@@ -588,40 +594,24 @@ int main(const int argc, const char** argv)
     truth_bands.insert(band_flux.begin(), band_flux.end());
   }
   truth_bands["cv"] = {new CVUniverse(options.m_truth)};
-  
-  //Carlos: I should clean this up at some point
-  std::vector<double> dansPTBins = {0, 0.075, 0.15, 0.25, 0.325, 0.4, 0.475, 0.55, 0.7, 0.85, 1, 1.25, 1.5, 2.5, 4.5},
-                      dansPzBins = {1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9, 10, 15, 20, 40, 60},
-                      //protonMomentumBins = {0.0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2.0},
-                      protonMomentumBins = {0.0,0.08,0.16,0.24,0.32,0.40,0.48,0.56,0.64,0.72,0.8,0.88,0.96,1.04,1.12,1.2,1.28,1.36,1.44,1.52,1.6},
-                      //Pt_bins = {0, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2},
-		      Pt_bins = {0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5},
-		      KE_bins = {0.0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1.0, 1.25, 1.5},
-		      EavailBins = {0, 0.04, 0.08, 0.12, 0.16, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.8, 1, 1.2},
-		      electronAngleBins = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40},
-		      protonAngleBins = {0,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180},
-                      phiAngleBins = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100},
-                      deltaPtXBins = {-2, -1.8, -1.6, -1.4, -1.2,-1,-0.8,-0.6,-0.4,-0.2,0,0.2,0.4,0.6,0.8,1.0,1.2,1.4,1.6,1.8,2},
-                      T_p_bins = {0,100,200,300,400,500,600,700,800,900,1000}, 
-                      electronEnergyBins = {0.0,0.5,1.0,1.5,2,2.5,3.0,3.5,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,20};
-                      //electronEnergyBins = {0.0,0.25,0.5,0.75,1.0,1.25,1.5,1.75,2,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0,4.5,5.0,5.5,6.0,6.5,7.0,7.5,8.0,9,10,12.5,15,17.5,20};
-  
+
+  //binning vectors are defined in util/Binning.h
   std::vector<Variable*> vars = {
     //Reco variables
     new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElectronEnergyTrue),
     new Variable("E_avail", "E_{avail} [GeV]", EavailBins, &CVUniverse::GetEavail, &CVUniverse::GetEavailTrue),
     new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
-    new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", Pt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue),
-    new Variable("Lepton_Pl", "p_{|,e} [GeV/c]", Pt_bins, &CVUniverse::GetElectronPParallel, &CVUniverse::GetElectronPParallelTrue),
+    new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", leptonPt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue),
+    new Variable("Lepton_Pl", "p_{|,e} [GeV/c]", Pl_bins, &CVUniverse::GetElectronPParallel, &CVUniverse::GetElectronPParallelTrue),
     new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetElectronThetaDegTrue),    
     new Variable("Proton_p", "p_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),
-    new Variable("Proton_Pt", "p_{T,p} [GeV/c]", Pt_bins, &CVUniverse::GetProtonPt, &CVUniverse::GetProtonPtTrue),
-    new Variable("Proton_Pl", "p_{|,p} [GeV/c]", Pt_bins, &CVUniverse::GetProtonPParallel, &CVUniverse::GetProtonPParallelTrue),
+    new Variable("Proton_Pt", "p_{T,p} [GeV/c]", leptonPt_bins, &CVUniverse::GetProtonPt, &CVUniverse::GetProtonPtTrue),
+    new Variable("Proton_Pl", "p_{|,p} [GeV/c]", Pl_bins, &CVUniverse::GetProtonPParallel, &CVUniverse::GetProtonPParallelTrue),
     new Variable("Theta_p", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonThetaDeg, &CVUniverse::GetProtonThetaDegTrue),    
     new Variable("Sum_T_proton", "#Sigma #T_{p} [MeV]", T_p_bins, &CVUniverse::GetSumProtonT, &CVUniverse::GetSumProtonTTrue), 
 
     //tki vars start here
-    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", Pt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDeltaPtTrue),
+    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", deltaPt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDeltaPtTrue),
     new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDeltaPtXTrue),
     new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDeltaPtYTrue),
     new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetAlphaTTrue),
@@ -636,39 +626,8 @@ int main(const int argc, const char** argv)
     //new Variable("Theta_p_e", "#theta_{e,p} true [deg]", protonAngleBins, &CVUniverse::GetDummyVar, &CVUniverse::GetOpeningAngleTrue),
     //new Variable("Pt_lep", "p_{T,e} true [GeV]", Pt_bins, &CVUniverse::GetDummyVar, &CVUniverse::GetElectronPtTrue)
   };
-  
-/*
-  //bins for cut plots
-  std::vector<double> binaryCut_bins = {-0.5,0.5,1.5},
-    VertexZ_bins,
-    //VertexApothem_bins, //just gonna use binary bins, not an easy way to show this other it is or it isn't in the hexagon
-    StartPointVertexMultiplicity_bins = {-1,0,1,2,3,4,5,6,7,8},
-    Afterpulsing_bins = {0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1},
-    Deadtime_bins = {0,1,2,3,4,5,6},
-    DSCalVisE_bins = {0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.20,0.21,0.22,0.23,0.24,0.25},
-    ODCalVisE_bins = {0,0.0025,0.005,0.0075,0.01,0.0125,0.015,0.0175,0.02,0.0225,0.025,0.0275,0.03,0.0325,0.035,0.0375,0.04,0.0425,0.045,0.0475,0.05,0.0525,0.055,0.0575,0.06},
-    VertexTrackMultiplicity_bins = {0,1,2,3,4,5,6},
-    //TransverseGapScore_bins = {0,2,4,6,8,10,12,14,15,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50},
-    TransverseGapScore_bins = {0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100},
-    NonMIPClusFrac_bins = {0,0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1},
-    //EMScore_bins = {0.499,0.549,0.599,0.649,0.699,0.749,0.799,0.849,0.899,0.949,0.999,1.049},
-    EMScore_bins = {0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1,1.05},
-    NMichel_bins = {0, 1, 2, 3, 4, 5},
-    MeanFrontDEDX_bins = {0.2,0.4,0.6,0.8,1,1.2,1.4,1.6,1.8,2,2.2,2.4,2.6,2.8,3,3.2,3.4,3.6,3.8,4,4.2,4.4,4.6,4.8,5,5.2,5.4,5.6,5.8,6,6.2,6.4,6.6,6.8,7,8,9,10},
-    Modified_E_avail_bins = {0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2},
-    ESCChi2_bins = {0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40},
-    Psi_bins = {0,0.025,0.05,0.075,0.1,0.125,0.15,0.175,0.2,0.225,0.25,0.275,0.3,0.325,0.35,0.375,0.4,0.425,0.45,0.475,0.5},
-    Etheta_bins = {0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.010,0.015,0.02,0.025};
-    //E_lep_Sin2Theta_bins = {0,0.001,0.002,0.003,0.004,0.005,0.006,0.007,0.008,0.009,0.010,0.015,0.02,0.025,0.03}; 
-    //Etheta_bins = {0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1};
 
-  //5980, maxZ = 8422,
-  const double VertexZBinWidth = 100; //mm
-  for(int whichBin = 0; whichBin < 27 + 1; ++whichBin) VertexZ_bins.push_back(5880 + (VertexZBinWidth * whichBin));
-
-  
-  //std::vector<Variable*> vars = {new Variable("VertexTrackMultiplicity", "Vertex Track Multiplicity", VertexTrackMultiplicity_bins, &CVUniverse::GetVertexTrackMultiplicity, &CVUniverse::GetDummyVar)};
-  
+  /*
   //Cut variables (for when I want to plot the things I'm cutting on
   std::vector<Variable*> vars = {
     new Variable("NoVertexMismatch", "NoVertexMismatch", binaryCut_bins, &CVUniverse::GetHasNoVertexMismatch, &CVUniverse::GetDummyVar),
@@ -731,7 +690,7 @@ int main(const int argc, const char** argv)
   for(auto& var: vars2D) var->InitializeMCHists(error_bands, truth_bands);
   for(auto& var: vars2D) var->InitializeDATAHists(data_band);
 
-  //This is for my saved output trees, just make sure it matches the elements of "studies"
+  //This is for my saved output trees, just make sure it matches the entries of "studies"
   //don't need to worry about it if not writing output tree
   //std::vector<std::string> sidebandNames = {"Signal_Region"};
   std::vector<std::string> sidebandNames = {"Signal_Region", "MeanFrontDEDX_Sideband", "Michel_Sideband"};
@@ -739,7 +698,7 @@ int main(const int argc, const char** argv)
   //std::vector<std::string> sidebandNames = {"passes_precuts"};
 
   //Initialize my output tree stuff. if write_tree is false I still get an instance of the class, but it doesn't really do much or add any complexity/time  
-  g_OutputTreeManager.Init(MC_TUPLE_OUT_FILE_NAME, write_tree, *options.m_mc->GetChain()->GetTree(), sidebandNames);
+  g_OutputTreeManager.Init(mc_tuple_out_filename, write_tree, *options.m_mc->GetChain()->GetTree(), sidebandNames);
 
   // Loop entries and fill
   try
@@ -758,11 +717,11 @@ int main(const int argc, const char** argv)
     std::cout << "Data cut summary:\n" << mycuts << "\n";
     
     //Write MC results
-    TFile* mcOutDir = TFile::Open(MC_OUT_FILE_NAME, "RECREATE");
+    TFile* mcOutDir = TFile::Open(mc_out_filename.c_str(), "RECREATE");
 
     if(!mcOutDir)
     {
-      std::cerr << "Failed to open a file named " << MC_OUT_FILE_NAME << " in the current directory for writing histograms.\n";
+      std::cerr << "Failed to open a file named " << mc_out_filename << " in the current directory for writing histograms.\n";
       return badOutputFile;
     }
 
@@ -793,10 +752,10 @@ int main(const int argc, const char** argv)
     
     //Write data results
     
-    TFile* dataOutDir = TFile::Open(DATA_OUT_FILE_NAME, "RECREATE");
+    TFile* dataOutDir = TFile::Open(data_out_filename.c_str(), "RECREATE");
     if(!dataOutDir)
     {
-      std::cerr << "Failed to open a file named " << DATA_OUT_FILE_NAME << " in the current directory for writing histograms.\n";
+      std::cerr << "Failed to open a file named " << data_out_filename << " in the current directory for writing histograms.\n";
       return badOutputFile;
     }
     
