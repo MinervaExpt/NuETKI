@@ -4,7 +4,7 @@
 // And saves the scaled signal region to a new root file, to be used in ExtractCrossSection.cpp
 //
 // Usage (example):
-//   root -l -b -q 'FitBackgrounds.cpp("data.root","mc.root",3,"DeltaPt")'
+//   FitBackgrounds data.root mc.root DeltaPt
 //
 // To do: write the scale factors to the histogram (or somewhere), so I can just know what they are???
 #pragma GCC diagnostic push
@@ -25,11 +25,12 @@
 #include "cuts/q3RecoCut.h"
 #include "cuts/NuETKICuts.h"
 #include "cuts/NuETKISignal.h"
-//#include "Binning.h" //TODO: Fix me
 
 //PlotUtils includes
 #include "MinervaUnfold/MnvUnfold.h"
 #include "PlotUtils/MnvH1D.h"
+#include "PlotUtils/MnvVertErrorBand.h"
+#include "PlotUtils/MnvLatErrorBand.h"
 #include "PlotUtils/MnvPlotter.h"
 #include "PlotUtils/makeChainWrapper.h"
 #include "PlotUtils/HistWrapper.h"
@@ -94,62 +95,85 @@ ScaleFactors ExtractScaleFactors(
   sf.michelBkg.resize(nbins, 1.0);
   sf.michelSig.resize(nbins, 1.0);
 
-  for (int ib = 1; ib <= nbins; ++ib) {
-    double data_signal_region = data_hists[0]->GetBinContent(ib);
-    double data_meanFront_sb = data_hists[1]->GetBinContent(ib);
-    double data_michel_sb = data_hists[2]->GetBinContent(ib);
 
-    // MeanFront sideband calculation
-    double d_s = data_signal_region - (
-      (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale
-    );
-    double d_sb = data_meanFront_sb - (
-      (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale
-    );
-
-    double mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
-    double mc_sig_sb = mc_hists[0][1]->GetBinContent(ib) * mcScale;
-    double mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
-    double mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
-
-    double delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
-    double bkg_scale_1 = 1.0, sig_scale_1 = 1.0;
-    if (std::fabs(delta) > 1e-12) {
-      bkg_scale_1 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
-      sig_scale_1 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
-    } else {
-      bkg_scale_1 = 1.0;
-      sig_scale_1 = 1.0;
-    }
-    sf.meanFrontBkg[ib-1] = bkg_scale_1;
-    sf.meanFrontSig[ib-1] = sig_scale_1;
-
-    // Michel sideband calculation
-    d_s = data_signal_region - (
-      (mc_hists[2][0]->GetBinContent(ib) + mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale
-    );
-    d_sb = data_michel_sb - (
-      (mc_hists[2][2]->GetBinContent(ib) + mc_hists[3][2]->GetBinContent(ib) + mc_hists[4][2]->GetBinContent(ib) + mc_hists[5][2]->GetBinContent(ib)) * mcScale
-    );
-
-    mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
-    mc_sig_sb = mc_hists[0][2]->GetBinContent(ib) * mcScale;
-    mc_bkg_s  = (mc_hists[1][0]->GetBinContent(ib)) * mcScale;
-    mc_bkg_sb = (mc_hists[1][2]->GetBinContent(ib)) * mcScale;
-
-    delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
-    double bkg_scale_2 = 1.0, sig_scale_2 = 1.0;
-    if (std::fabs(delta) > 1e-12) {
-      bkg_scale_2 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
-      sig_scale_2 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
-    } else {
-      bkg_scale_2 = 1.0;
-      sig_scale_2 = 1.0;
-    }
-    sf.michelBkg[ib-1] = bkg_scale_2;
-    sf.michelSig[ib-1] = sig_scale_2;
-  } // end bin loop  
-
+  std::vector<std::string> latErrorBandNames = mc_hists[0][0]->GetLatErrorBandNames();
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  
+  std::cout << "CARLOS TEST: LAT ERROR BAND NAMES " << std::endl;
+  for (const auto& s : latErrorBandNames){
+    std::cout << s << std::endl;
+  }
+  std::cout << "CARLOS TEST: VERT ERROR BAND NAMES " << std::endl;
+  for (const auto& s : vertErrorBandNames){
+    std::cout << s << std::endl;
+  }
+  size_t band_index = 0;
+  std::cout << "Beginning Loop over error bands" << std::endl;
+  for (const auto& bandName : vertErrorBandNames){//Loop over error bands
+    std::cout << "Currently on band #" << band_index << ", which is: " << bandName << std::endl;
+    PlotUtils::MnvVertErrorBand* band = mc_hists[0][0]->GetVertErrorBand( bandName );
+    std::vector<TH1D*> band_universes = band->GetHists();
+    size_t universe_index = 0;
+    for (const auto& universe : band_universes){ //Loop over universes within that error band (normally 2, although flux has 100)
+      std::cout << "universe " << universe_index << " in band " << bandName << ": now looping through its bins. " << std::endl;
+      for (int ib = 1; ib <= nbins; ++ib) {
+	std::cout << "bin: " << ib << std::endl;
+	/*
+	double data_signal_region = data_hists[0]->GetBinContent(ib);
+	double data_meanFront_sb = data_hists[1]->GetBinContent(ib);
+	double data_michel_sb = data_hists[2]->GetBinContent(ib);
+	
+	// MeanFront sideband calculation
+	double d_s = data_signal_region - (
+					   (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale
+					   );
+	double d_sb = data_meanFront_sb - (
+					   (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale
+					   );
+	
+	double mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
+	double mc_sig_sb = mc_hists[0][1]->GetBinContent(ib) * mcScale;
+	double mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
+	double mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
+	
+	double delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
+	double bkg_scale_1 = 1.0, sig_scale_1 = 1.0;
+	if (std::fabs(delta) > 1e-12) {
+	  bkg_scale_1 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
+	  sig_scale_1 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
+	} else {
+	  bkg_scale_1 = 1.0;
+	  sig_scale_1 = 1.0;
+	}
+	sf.meanFrontBkg[ib-1] = bkg_scale_1;
+	sf.meanFrontSig[ib-1] = sig_scale_1;
+	
+	// Michel sideband calculation
+	d_s = data_signal_region - ( (mc_hists[2][0]->GetBinContent(ib) + mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
+	d_sb = data_michel_sb - ( (mc_hists[2][2]->GetBinContent(ib) + mc_hists[3][2]->GetBinContent(ib) + mc_hists[4][2]->GetBinContent(ib) + mc_hists[5][2]->GetBinContent(ib)) * mcScale );
+	
+	mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
+	mc_sig_sb = mc_hists[0][2]->GetBinContent(ib) * mcScale;
+	mc_bkg_s  = (mc_hists[1][0]->GetBinContent(ib)) * mcScale;
+	mc_bkg_sb = (mc_hists[1][2]->GetBinContent(ib)) * mcScale;
+	
+	delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
+	double bkg_scale_2 = 1.0, sig_scale_2 = 1.0;
+	if (std::fabs(delta) > 1e-12) {
+	  bkg_scale_2 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
+	  sig_scale_2 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
+	} else {
+	  bkg_scale_2 = 1.0;
+	  sig_scale_2 = 1.0;
+	}
+	sf.michelBkg[ib-1] = bkg_scale_2;
+	sf.michelSig[ib-1] = sig_scale_2;
+	*/
+      } // end bin loop
+      ++universe_index;
+    } //end universe loop within error band
+    ++band_index;
+  } //end error band loop
   return sf;
 }
 
@@ -424,17 +448,15 @@ int main(int argc, char** argv) {
 
   TH1::AddDirectory(kFALSE); // avoid ownership issues with ROOT directories
 
-  if (argc < 3) {
-    std::cerr << "USAGE: " << argv[0] << " <data.root> <mc.root> [rebinFactor=1] [variableName=Lepton_Pt]\n";
+  if (argc < 2) {
+    std::cerr << "USAGE: " << argv[0] << " <data.root> <mc.root> [variableName=Lepton_Pt]\n";
     return 1;
   }
 
   const char* dataPath = argv[1];
   const char* mcPath   = argv[2];
-  int rebinFactor = 1;
-  std::string varName = "Lepton_Pt";
-  if (argc >= 4) rebinFactor = std::stoi(argv[3]);
-  if (argc >= 5) varName = argv[4];
+  std::string varName = "DeltaPt";
+  if (argc >= 4) varName = argv[3];
 
   TFile* dataFile = TFile::Open(dataPath, "READ");
   if (!dataFile || dataFile->IsZombie()) {
@@ -502,14 +524,9 @@ int main(int argc, char** argv) {
       std::cerr << "ERROR: data hist " << dataName << " not found in data file\n";
       return 10;
     }
-    // Make clones / rebin and detach from file
+    // Make clones and detach from file
     PlotUtils::MnvH1D* dclone = dynamic_cast<PlotUtils::MnvH1D*>(d->Clone((d->GetName()+std::string("_clone")).c_str()));
     dclone->SetDirectory(nullptr);
-    if (rebinFactor > 1) {
-      // MnvH1D::Rebin returns TH1*, but calling Rebin on MnvH1D is supported and returns a TH1*;
-      // to keep MnvH1D behaviour, we rebin the clone object in-place using Rebin(rebinFactor)
-      dclone->Rebin(rebinFactor);
-    }
     data_hists.push_back(dclone);
 
     for (size_t c = 0; c < bkgdCategoryNames.size(); ++c) {
@@ -522,7 +539,6 @@ int main(int argc, char** argv) {
       }
       PlotUtils::MnvH1D* mclone = dynamic_cast<PlotUtils::MnvH1D*>(m->Clone((m->GetName())));
       mclone->SetDirectory(nullptr);
-      if (rebinFactor > 1) mclone->Rebin(rebinFactor);
       mc_hists[c].push_back(mclone);
     }
   }
@@ -537,9 +553,9 @@ int main(int argc, char** argv) {
   }
 
   //double lambda = 0;
-  double lambda = 10000000000;
-  //ScaleFactors sfs = ExtractScaleFactors(data_hists, mc_hists, mcScale);
-  ScaleFactors sfs = ExtractScaleFactorsWithReg(data_hists, mc_hists, mcScale, lambda);
+  //double lambda = 10000000000;
+  ScaleFactors sfs = ExtractScaleFactors(data_hists, mc_hists, mcScale);
+  //ScaleFactors sfs = ExtractScaleFactorsWithReg(data_hists, mc_hists, mcScale, lambda);
 
   //This is if I just wanna make the plots without any bkg scaling, ie, all scale factors are 1
   //ScaleFactors sfs;
