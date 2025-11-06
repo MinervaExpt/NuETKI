@@ -79,6 +79,11 @@ struct ScaleFactors {
   std::vector<double> meanFrontSig;
   std::vector<double> michelBkg;
   std::vector<double> michelSig;
+
+  PlotUtils::MnvH1D* meanFrontBkg_mnvhist;
+  PlotUtils::MnvH1D* meanFrontSig_mnvhist;
+  PlotUtils::MnvH1D* michelBkg_mnvhist;
+  PlotUtils::MnvH1D* michelSig_mnvhist;
 };
 
 //This is the version with NO regularization whatsoever
@@ -95,46 +100,110 @@ ScaleFactors ExtractScaleFactors(
   sf.michelBkg.resize(nbins, 1.0);
   sf.michelSig.resize(nbins, 1.0);
 
+  sf.meanFrontBkg_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
+  sf.meanFrontSig_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
+  sf.michelBkg_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
+  sf.michelSig_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
 
-  std::vector<std::string> latErrorBandNames = mc_hists[0][0]->GetLatErrorBandNames();
-  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  sf.meanFrontBkg_mnvhist->SetDirectory(nullptr);
+  sf.meanFrontSig_mnvhist->SetDirectory(nullptr);
+  sf.michelBkg_mnvhist->SetDirectory(nullptr);
+  sf.michelSig_mnvhist->SetDirectory(nullptr);
+
+  //CV bin loop
+  for (int ib = 1; ib <= nbins; ++ib) {
+    double data_signal_region = data_hists[0]->GetBinContent(ib);
+    double data_meanFront_sb = data_hists[1]->GetBinContent(ib);
+    double data_michel_sb = data_hists[2]->GetBinContent(ib);
+    
+    // MeanFront sideband calculation
+    double d_s = data_signal_region - ( (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
+    double d_sb = data_meanFront_sb - ( (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale );
+    
+    double mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
+    double mc_sig_sb = mc_hists[0][1]->GetBinContent(ib) * mcScale;
+    double mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
+    double mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
+    std::cout << "CV bin " << ib << " content: " << mc_sig_s << std::endl;
+        
+    double delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
+    double bkg_scale_1 = 1.0, sig_scale_1 = 1.0;
+    if (std::fabs(delta) > 1e-12) {
+      bkg_scale_1 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
+      sig_scale_1 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
+    } else {
+      bkg_scale_1 = 1.0;
+      sig_scale_1 = 1.0;
+    }
+    sf.meanFrontBkg[ib-1] = bkg_scale_1;
+    sf.meanFrontSig[ib-1] = sig_scale_1;
+    sf.meanFrontBkg_mnvhist->SetBinContent(ib, bkg_scale_1);
+    sf.meanFrontSig_mnvhist->SetBinContent(ib, sig_scale_1);
+    
+    // Michel sideband calculation
+    d_s = data_signal_region - ( (mc_hists[2][0]->GetBinContent(ib) + mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
+    d_sb = data_michel_sb - ( (mc_hists[2][2]->GetBinContent(ib) + mc_hists[3][2]->GetBinContent(ib) + mc_hists[4][2]->GetBinContent(ib) + mc_hists[5][2]->GetBinContent(ib)) * mcScale );
+    
+    mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
+    mc_sig_sb = mc_hists[0][2]->GetBinContent(ib) * mcScale;
+    mc_bkg_s  = (mc_hists[1][0]->GetBinContent(ib)) * mcScale;
+    mc_bkg_sb = (mc_hists[1][2]->GetBinContent(ib)) * mcScale;
+    
+    delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
+    double bkg_scale_2 = 1.0, sig_scale_2 = 1.0;
+    if (std::fabs(delta) > 1e-12) {
+      bkg_scale_2 = ( mc_sig_sb * (-d_s) + mc_sig_s * d_sb ) / delta;
+      sig_scale_2 = ( d_s * mc_bkg_sb - d_sb * mc_bkg_s ) / delta;
+    } else {
+      bkg_scale_2 = 1.0;
+      sig_scale_2 = 1.0;
+    }
+    sf.michelBkg[ib-1] = bkg_scale_2;
+    sf.michelSig[ib-1] = sig_scale_2;
+    sf.michelBkg_mnvhist->SetBinContent(ib, bkg_scale_2);
+    sf.michelSig_mnvhist->SetBinContent(ib, sig_scale_2);        
+  } // CV end bin loop
   
-  std::cout << "CARLOS TEST: LAT ERROR BAND NAMES " << std::endl;
-  for (const auto& s : latErrorBandNames){
-    std::cout << s << std::endl;
-  }
+  //std::vector<std::string> latErrorBandNames = mc_hists[0][0]->GetLatErrorBandNames();
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  /*
   std::cout << "CARLOS TEST: VERT ERROR BAND NAMES " << std::endl;
   for (const auto& s : vertErrorBandNames){
     std::cout << s << std::endl;
   }
+  */
+  
   size_t band_index = 0;
   std::cout << "Beginning Loop over error bands" << std::endl;
   for (const auto& bandName : vertErrorBandNames){//Loop over error bands
-    std::cout << "Currently on band #" << band_index << ", which is: " << bandName << std::endl;
     PlotUtils::MnvVertErrorBand* band = mc_hists[0][0]->GetVertErrorBand( bandName );
     std::vector<TH1D*> band_universes = band->GetHists();
+    //std::cout << "Currently on band #" << band_index << ", which is: " << bandName << " and contains " << band_universes.size() << " universes/histograms. " << std::endl;
     size_t universe_index = 0;
     for (const auto& universe : band_universes){ //Loop over universes within that error band (normally 2, although flux has 100)
-      std::cout << "universe " << universe_index << " in band " << bandName << ": now looping through its bins. " << std::endl;
+      if (bandName == "GENIE_FrAbs_N") { std::cout << "universe " << universe_index << " in band " << bandName << ": now looping through its bins. " << std::endl; }
       for (int ib = 1; ib <= nbins; ++ib) {
-	std::cout << "bin: " << ib << std::endl;
-	/*
+	double mc_sig_region = universe->GetBinContent(ib);
+	if (bandName == "GENIE_FrAbs_N") { std::cout << "bin " << ib << " content: " << mc_sig_region << std::endl; }
+	
 	double data_signal_region = data_hists[0]->GetBinContent(ib);
 	double data_meanFront_sb = data_hists[1]->GetBinContent(ib);
 	double data_michel_sb = data_hists[2]->GetBinContent(ib);
 	
 	// MeanFront sideband calculation
-	double d_s = data_signal_region - (
-					   (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale
-					   );
-	double d_sb = data_meanFront_sb - (
-					   (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale
-					   );
+	//double d_s = data_signal_region - ( (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
+	//double d_sb = data_meanFront_sb - ( (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale );
+	double d_s = data_signal_region - ( (mc_hists[1][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[2][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
+	double d_sb = data_meanFront_sb - ( (mc_hists[1][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[2][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale );
 	
-	double mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
-	double mc_sig_sb = mc_hists[0][1]->GetBinContent(ib) * mcScale;
-	double mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
-	double mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
+	//double mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale;
+	//double mc_sig_sb = mc_hists[0][1]->GetBinContent(ib) * mcScale;
+	//double mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
+	//double mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
+	double mc_sig_s = mc_hists[0][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) * mcScale;
+	double mc_sig_sb = mc_hists[0][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) * mcScale;
+	double mc_bkg_s  = (mc_hists[3][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
+	double mc_bkg_sb = (mc_hists[3][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
 	
 	double delta = mc_sig_s * mc_bkg_sb - mc_sig_sb * mc_bkg_s;
 	double bkg_scale_1 = 1.0, sig_scale_1 = 1.0;
@@ -147,8 +216,10 @@ ScaleFactors ExtractScaleFactors(
 	}
 	sf.meanFrontBkg[ib-1] = bkg_scale_1;
 	sf.meanFrontSig[ib-1] = sig_scale_1;
+	sf.meanFrontBkg_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib, bkg_scale_1);
+	sf.meanFrontSig_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib, sig_scale_1);
 	
-	// Michel sideband calculation
+	  // Michel sideband calculation
 	d_s = data_signal_region - ( (mc_hists[2][0]->GetBinContent(ib) + mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale );
 	d_sb = data_michel_sb - ( (mc_hists[2][2]->GetBinContent(ib) + mc_hists[3][2]->GetBinContent(ib) + mc_hists[4][2]->GetBinContent(ib) + mc_hists[5][2]->GetBinContent(ib)) * mcScale );
 	
@@ -168,12 +239,22 @@ ScaleFactors ExtractScaleFactors(
 	}
 	sf.michelBkg[ib-1] = bkg_scale_2;
 	sf.michelSig[ib-1] = sig_scale_2;
-	*/
+	sf.michelBkg_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib, bkg_scale_2);
+	sf.michelSig_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib, sig_scale_2);
+
+
       } // end bin loop
       ++universe_index;
     } //end universe loop within error band
     ++band_index;
   } //end error band loop
+  std::cout << "Carlos test ,                                   CV sf in meanFrontbin 1 = " << sf.meanFrontBkg_mnvhist->GetBinContent(1) << std::endl;
+  std::cout << "Carlos testing universe looping, test band univ 0 sf in meanFront bin 1 = " << sf.meanFrontBkg_mnvhist->GetVertErrorBand("GENIE_FrAbs_N")->GetHist(0)->GetBinContent(1) << std::endl;
+  std::cout << "Carlos testing universe looping, test band univ 1 sf in meanFront bin 1 = " << sf.meanFrontBkg_mnvhist->GetVertErrorBand("GENIE_FrAbs_N")->GetHist(1)->GetBinContent(1) << std::endl;
+
+  std::cout << "Carlos test ,                                  CV sf in michel bin 1 = " << sf.michelBkg_mnvhist->GetBinContent(1) << std::endl;
+  std::cout << "Carlos testing universe looping, test band univ 0 sf in michel bin 1 = " << sf.michelBkg_mnvhist->GetVertErrorBand("GENIE_FrAbs_N")->GetHist(0)->GetBinContent(1) << std::endl;
+  std::cout << "Carlos testing universe looping, test band univ 1 sf in michel bin 1 = " << sf.michelBkg_mnvhist->GetVertErrorBand("GENIE_FrAbs_N")->GetHist(1)->GetBinContent(1) << std::endl;
   return sf;
 }
 
@@ -499,13 +580,12 @@ int main(int argc, char** argv) {
   plotter.data_line_width = 2;
   plotter.data_marker_size = 1.5;
 
-  // MC colors (same order used in Python)
+  // MC category colors 
   const std::vector<int> mcColors = {4, 7, 6, 2, 5, 416};
   int arr_int[6];
   for (size_t i=0;i<mcColors.size();++i) arr_int[i]=mcColors[i];
   int* arr = arr_int;
-
-  // categories and sidebands exactly as in Python
+  
   const std::vector<std::string> bkgdCategoryNames = {
     "selected_signal_reco", "background_NuECC_with_pions", "background_Other_NueCC",
     "background_NC_pi0", "background_CC_Numu_pi0", "background_Other"
@@ -514,7 +594,7 @@ int main(int argc, char** argv) {
 
   // Load histograms (MnvH1D) for data & MC
   std::vector<PlotUtils::MnvH1D*> data_hists;
-  std::vector<std::vector<PlotUtils::MnvH1D*>> mc_hists(6); // 6 categories, each has 3 sidebands
+  std::vector<std::vector<PlotUtils::MnvH1D*>> mc_hists(6); // 6 categories, each has 3 sidebands. First index is background category, second index is sideband region
 
   for (size_t s = 0; s < sidebands.size(); ++s) {
     std::string dataName = varName + sidebands[s] + "data";
@@ -564,6 +644,7 @@ int main(int argc, char** argv) {
   //sfs.michelBkg.resize(nbins, 1.0);
   //sfs.michelSig.resize(nbins, 1.0);
 
+  /*
   std::cout << "mean front bkg scale factors: " << std::endl;
   for (double sf : sfs.meanFrontBkg){
     std::cout << "    " << sf << std::endl;
@@ -571,7 +652,7 @@ int main(int argc, char** argv) {
   std::cout << "michel bkg scale factors: " << std::endl;
   for (double sf : sfs.michelBkg){
     std::cout << "    " << sf << std::endl;
-  }
+    }*/
   
   // Make scale factor histograms
   auto makeSFhist = [&](const std::string& name, const std::vector<double>& vals) -> PlotUtils::MnvH1D* {
@@ -607,6 +688,7 @@ int main(int argc, char** argv) {
     c->SaveAs((filename + ".png").c_str());
     delete c;
   };
+  std::cout << "segfault before here?" << std::endl;
 
   // Save each scale factor histogram
   saveSFPlot(mean_bkg_h, "meanFront_bkg_scale_factors");
