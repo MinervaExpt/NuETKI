@@ -180,8 +180,8 @@ int main(const int argc, const char** argv)
   {
     const std::string keyName = key->GetName();
     const size_t endOfPrefix = keyName.find("_data");
-    //if (keyName.find("DeltaPt_") == std::string::npos) { continue; } //hardcode to do ONLY delta Pt
-    if (keyName.find("Lepton_Pt_") == std::string::npos) { continue; }  // or lepton pt
+    if (keyName.find("DeltaPt_") == std::string::npos) { continue; } //hardcode to do ONLY delta Pt
+    //if (keyName.find("Lepton_Pt_") == std::string::npos) { continue; }  // or lepton pt
     //don't want to extract cross sections from my sideband samples
     if (keyName.find("MichelSB") != std::string::npos){ continue; }
     if (keyName.find("NPiSB") != std::string::npos){ continue; }
@@ -292,6 +292,8 @@ int main(const int argc, const char** argv)
       return 4;
     }
   }
-
+  gROOT->GetListOfCanvases()->Delete();
+  gROOT->GetListOfFunctions()->Delete();
+  gROOT->GetListOfFiles()->Delete();
   return 0;
 }
