@@ -1,4 +1,4 @@
-cmake_minimum_required( VERSION 2.8.12 )
+cmake_minimum_required( VERSION 3.10 )
 
 project( MAT_IncPions )
 
@@ -66,7 +66,7 @@ add_subdirectory(util)
 #add_subdirectory(event)
 #add_subdirectory(cuts)
 #add_subdirectory(studies)
-add_subdirectory(systematics)
+#add_subdirectory(systematics)
 
 #Build main executables
 add_executable(runEventLoop runEventLoop.cpp)
