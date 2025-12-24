@@ -66,8 +66,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 
   static constexpr double pi = 3.141592653589793;
 
-  //what is this actual number supposed to be? I'm using a hardcoded value of 3.3 right now
-  //static constexpr double beam_tilt = 3.2627; //beam tilt downward with respect to z axis, in degrees
+  static constexpr double beam_tilt = 3.32316; //beam tilt downward with respect to z axis, in degrees. 58 mrads
 
   // ========================================================================
   // Write a "Get" function for all quantities access by your analysis.
@@ -83,14 +82,26 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // ========================================================================  
 
   //total energy including rest mass in GeV
-  double GetElectronEnergy() const {
+  virtual double GetElectronEnergy() const {
+    return GetElectronEnergyRaw() + GetEMEnergyShift();
+  }
+
+  //uncorrected electron energy, in GeV
+  virtual double GetElectronEnergyRaw() const {
     return GetVecElem("prong_part_E", 0, 3)/1000.;
+  }
+
+  //the python nu_e people scale electron energy down 5.8% in the CV, this gets overridden in the ElectronEnergyShift universes though
+  //Also in GeV
+  virtual double GetEMEnergyShift() const {
+    static const double EM_ENERGY_SCALE_SHIFT_ECAL = -0.058;
+    return GetVecElem("prong_ECALCalibE", 0)*EM_ENERGY_SCALE_SHIFT_ECAL/1000.;    
   }
 
   //Copied the overall format here from Ryan/Hang/Sarah's CCNue kinematics calculator, there may be a better way to do this?
   //Also extremely suspect for right now
   //returns in rad
-  double GetElectronTheta() const { 
+  virtual double GetElectronTheta() const { 
     std::vector<std::vector<double> > electronp = GetVecOfVecDouble("prong_part_E");
     ROOT::Math::XYZVector p(electronp[0][0], electronp[0][1], electronp[0][2]);
     ROOT::Math::RotationX r(-3.3 * (pi / 180.));
@@ -98,7 +109,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //mostly for plotting
-  double GetElectronThetaDeg() const {
+  virtual double GetElectronThetaDeg() const {
     double rad = GetElectronTheta();
     double deg = rad*180/pi;
     return deg;
@@ -108,7 +119,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //Actually I think this is wrong, the E that comes from prong_part_E doesn't have electron mass added...
   //probably cause electron rest mass is basically negligible (0.5MeV, or 0.0005 GeV, or less than the average hit energy...)
   //But either way, makes no sense to subtract it back off if it was never added in the first place
-  double GetElectronT() const{
+  virtual double GetElectronT() const{
     double leptonT = GetElectronEnergy() - M_e/1000.; //E_e from the function is in GeV, M_e is in MeV
     if (leptonT > 0){
       return leptonT;
@@ -121,7 +132,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //And actually same story as above here, this doesn't really make sense. It should just be prong_part_E straight up
   //which again makes sense, for relativistic particles E = p (pretend its squiggly)
   //Doesn't really hurt to do it, but the value is gonna be the same basically.
-  double GetElectronP() const{
+  virtual double GetElectronP() const{
     double M_lep_sqr = pow(M_e, 2) / pow(10, 6);  //over 10^6 to convert to GeV^2
     double leptonP = pow(GetElectronEnergy(), 2)-M_lep_sqr;
     if (leptonP > 0){
@@ -132,17 +143,17 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //Transverse momentum of the lepton (electron for me), in GeV
-  double GetElectronPt() const{
+  virtual double GetElectronPt() const{
     return (GetElectronP() * std::sin(GetElectronTheta()));
   }
 
   //Longitudinal momentum of the lepton (electron for me), in GeV
-  double GetElectronPParallel() const{
+  virtual double GetElectronPParallel() const{
     return (GetElectronP() * std::cos(GetElectronTheta()));
   }
 
   //MasterAnaDev_proton_theta, in rad
-  double GetProtonTheta() const {
+  virtual double GetProtonTheta() const {
     double protonTheta = GetDouble("MasterAnaDev_proton_theta");
     return protonTheta;
 
@@ -158,7 +169,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //same thing but in rad, useful for plotting. Also if there's no proton candidate don't convert it
-  double GetProtonThetaDeg() const {
+  virtual double GetProtonThetaDeg() const {
     double protonTheta = GetDouble("MasterAnaDev_proton_theta");
     //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
     if (protonTheta > -9999){
@@ -170,7 +181,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //Kinetic energy (T) of ONLY the primary proton candidate
-  double GetProtonT() const {
+  virtual double GetProtonT() const {
     double protonT = GetDouble("MasterAnaDev_proton_calib_energy"); //TO DO !! MAKE SURE THIS IS ACTUALLY T AND NOT TOTAL E
     if (protonT>-9999){ //aka is there a proton candidate
       return protonT/1000.;
@@ -181,7 +192,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //Total Kinetic energy (sigma T) of all proton candidates
-  double GetSumProtonT() const {
+  virtual double GetSumProtonT() const {
     double primary_proton_energy = GetDouble("MasterAnaDev_proton_calib_energy");
     if (primary_proton_energy < -1) { primary_proton_energy= 0; } //branch is set to -9999 by default, but tbh this shouldn't matter cause if there's no primary there shouldn't be any secondaries....
     
@@ -200,7 +211,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
   
   //MasterAnaDev_proton_P_fromdEdx, in GeV
-  double GetProtonP() const {
+  virtual double GetProtonP() const {
     double protonP = GetDouble("MasterAnaDev_proton_P_fromdEdx");
     if (protonP>-9999){ //aka is there a proton candidate
       return protonP/1000.;
@@ -211,22 +222,32 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
 
   //proton transverse momentum, in GeV
-  double GetProtonPt() const{
+  virtual double GetProtonPt() const{
     return (GetProtonP() * std::sin(GetProtonTheta()));
   }
 
   //proton longitudinal momentum, in GeV
-  double GetProtonPParallel() const{
+  virtual double GetProtonPParallel() const{
     return (GetProtonP() * std::cos(GetProtonTheta()));
   }
 
   //Hadronic available energy (no neutrons) in GeV
-  double GetEavail() const {
-    double E = GetDouble("blob_recoil_E_tracker") + GetDouble("blob_recoil_E_ecal");
-    //Check this correction by the electron energy... This is not what Hang does, and in fact it's different for data/MC
-    double Eavail = (E * 1.17 - ((0.008 * GetVecElem("prong_part_E", 0, 3)) + 5))/1000.; 
-    //std::cout << "Reco Eavail: " << Eavail << std::endl;
+  virtual double GetEavail() const {
+    static const double AVAILABLE_E_CORRECTION = 1.17;   
+    double E = (GetDouble("blob_recoil_E_tracker") + GetDouble("blob_recoil_E_ecal"))/1000.;
+    //double Eavail = (E * 1.17 - ((0.008 * GetVecElem("prong_part_E", 0, 3)) + 5))/1000.; 
+    double Eavail = (E * AVAILABLE_E_CORRECTION) - GetLeakageCorrection();
     return Eavail;
+  }
+
+  //Correction to E_avail, based off electron shower energy. In GeV
+  virtual double GetLeakageCorrection() const {
+    static const double LEAKAGE_CORRECTION = 0.008; //0.8% on ElectronEnergyRaw
+    static const double LEAKAGE_BIAS = 0.005; //flat +5 MeV to the leakage correction...
+    // for some reason the python nu_e code applies this +5 shift ONLY to the CV and not the universes... but why???
+    //according to david the systematics aren't based around the CV anyways, but instead the average of the universes so idk maybe it doesn't really matter
+    
+    return ( GetElectronEnergyRaw() * LEAKAGE_CORRECTION ) + LEAKAGE_BIAS;
   }
 
   //This is the same e-avail as above, but with all tracked proton calibrated kinetic energy subtracted off (
@@ -1153,6 +1174,11 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return -999; 
   }
   
+  // ========================================================================
+  // Getters copied from the nu_e python code, these are important cause they get overridden by various universes
+  // ========================================================================  
+
+
   // ========================================================================
   // START OF PRE EXISTING GETTERS THAT I DON'T USE
   // mostly muon kinematic stuff, didn't feel like getting rid of it
