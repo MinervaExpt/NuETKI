@@ -17,7 +17,7 @@ public:
   {
   };
 
-bool isNuEQELikeSignal( ChainWrapper& chw, int entry )
+bool isNuEQELikeSignal( PlotUtils::ChainWrapper& chw, int entry )
 {
   int mc_incoming              = static_cast<int>(chw.GetValue("mc_incoming",entry)); //should be 12 or -12
   int current                  = static_cast<int>(chw.GetValue("mc_current",entry));
@@ -62,13 +62,13 @@ bool isNuEQELikeSignal( ChainWrapper& chw, int entry )
     }
   }
 
-  if(abs(mc_incoming)==12 && current==1 && hasSignalProton && !hasMeson && !hasPhoton && electron_4vec[3]>2500) return true;
+  if(abs(mc_incoming)==12 && current==1 && hasSignalProton && !hasMeson && !hasPhoton && electron_4vec[3]>2500) { return true; }
   return false;
 
 }
   // Override this method from the base class to decide what events to
   // include in this selection
-  virtual bool passesCuts(ChainWrapper& chw, int entry)
+  virtual bool passesCuts(PlotUtils::ChainWrapper& chw, int entry)
   {
     //if((int)chw.GetValue("mc_incoming", entry)!=14) return false;
     //if((int)chw.GetValue("mc_current", entry)!=1) return false;
@@ -104,8 +104,10 @@ int main(const int argc, const char** argv)
   loop.setFiducial(5980, 8422);
 
   // Add the differential cross section dsigma/ds_dpT
-  double pt_edges[] = {0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5};
-  int pt_nbins = 15; 
+  double lepton_pt_edges[] = {0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6};
+  int lepton_pt_nbins = 8; 
+  double delta_pt_edges[] = {0, 0.2, 0.4, 0.6, 1, 1.5, 3};
+  int delta_pt_nbins = 6; 
   double alpha_edges[] = {0,10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160,170,180};
   int alpha_nbins = 18; 
   double SumTp_edges[] = {0,100,200,300,400,500,600,700,800,900,1000};
@@ -113,7 +115,7 @@ int main(const int argc, const char** argv)
   
   // Flux-integrated over the range 0.0 to 100.0 GeV
   MinModDepCCQEXSec* ds_dpT = new MinModDepCCQEXSec("pT");
-  ds_dpT->setBinEdges(pt_nbins, pt_edges);
+  ds_dpT->setBinEdges(lepton_pt_nbins, lepton_pt_edges);
   ds_dpT->setVariable(XSec::kPTLep);
   ds_dpT->setIsFluxIntegrated(true);
   ds_dpT->setDimension(1);
@@ -124,7 +126,7 @@ int main(const int argc, const char** argv)
   
   
   MinModDepCCQEXSec* ds_dDeltapT = new MinModDepCCQEXSec("DeltapT");
-  ds_dDeltapT->setBinEdges(pt_nbins, pt_edges);
+  ds_dDeltapT->setBinEdges(delta_pt_nbins, delta_pt_edges);
   ds_dDeltapT->setVariable(XSec::kTdpt);
   ds_dDeltapT->setIsFluxIntegrated(true);
   ds_dDeltapT->setDimension(1);
@@ -133,30 +135,30 @@ int main(const int argc, const char** argv)
   ds_dDeltapT->setUniverses(0); //default value, put 0 if you do not want universes to be included.
   loop.addXSec(ds_dDeltapT);
 
-  MinModDepCCQEXSec* ds_dAlphapT = new MinModDepCCQEXSec("AlphapT");
-  ds_dAlphapT->setBinEdges(alpha_nbins, alpha_edges);
-  ds_dAlphapT->setVariable(XSec::kTdalphat);
-  ds_dAlphapT->setIsFluxIntegrated(true);
-  ds_dAlphapT->setDimension(1);
-  ds_dAlphapT->setFluxIntLimits(0.0, 100.0);
-  ds_dAlphapT->setNormalizationType(XSec::kPerNucleon);  
-  ds_dAlphapT->setUniverses(0); //default value, put 0 if you do not want universes to be included.
-  loop.addXSec(ds_dAlphapT);
+  // MinModDepCCQEXSec* ds_dAlphapT = new MinModDepCCQEXSec("AlphapT");
+  // ds_dAlphapT->setBinEdges(alpha_nbins, alpha_edges);
+  // ds_dAlphapT->setVariable(XSec::kTdalphat);
+  // ds_dAlphapT->setIsFluxIntegrated(true);
+  // ds_dAlphapT->setDimension(1);
+  // ds_dAlphapT->setFluxIntLimits(0.0, 100.0);
+  // ds_dAlphapT->setNormalizationType(XSec::kPerNucleon);  
+  // ds_dAlphapT->setUniverses(0); //default value, put 0 if you do not want universes to be included.
+  // loop.addXSec(ds_dAlphapT);
 
-  MinModDepCCQEXSec* ds_SumT_p = new MinModDepCCQEXSec("SumTp");
-  ds_SumT_p->setBinEdges(SumTp_nbins, SumTp_edges);
-  ds_SumT_p->setVariable(XSec::kSumTP);
-  ds_SumT_p->setIsFluxIntegrated(true);
-  ds_SumT_p->setDimension(1);
-  ds_SumT_p->setFluxIntLimits(0.0, 100.0);
-  ds_SumT_p->setNormalizationType(XSec::kPerNucleon);  
-  ds_SumT_p->setUniverses(0); //default value, put 0 if you do not want universes to be included.
-  loop.addXSec(ds_SumT_p);
+  // MinModDepCCQEXSec* ds_SumT_p = new MinModDepCCQEXSec("SumTp");
+  // ds_SumT_p->setBinEdges(SumTp_nbins, SumTp_edges);
+  // ds_SumT_p->setVariable(XSec::kSumTP);
+  // ds_SumT_p->setIsFluxIntegrated(true);
+  // ds_SumT_p->setDimension(1);
+  // ds_SumT_p->setFluxIntLimits(0.0, 100.0);
+  // ds_SumT_p->setNormalizationType(XSec::kPerNucleon);  
+  // ds_SumT_p->setUniverses(0); //default value, put 0 if you do not want universes to be included.
+  // loop.addXSec(ds_SumT_p);
   
   loop.runLoop();
 
   // Get the output histograms and save them to file
-  string geniefilename =  "GENIEXSECEXTRACT_" + playlistFile.substr(playlistFile.rfind("/")+1, playlistFile.find(".")) + ".root";
+  std::string geniefilename =  "GENIEXSECEXTRACT_" + playlistFile.substr(playlistFile.rfind("/")+1, playlistFile.find(".")) + ".root";
   TFile fout(geniefilename.c_str(), "RECREATE");
   for(uint i=0; i<loop.getXSecs().size(); ++i)
   {
