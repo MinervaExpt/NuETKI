@@ -123,7 +123,7 @@ namespace reco
       //      std::cout <<"blob_recoil_E_tracker: "
       //double Eavail = (univ.GetDouble("blob_recoil_E_tracker") + univ.GetDouble("blob_recoil_E_ecal")) * 1.17 - (0.008 * univ.GetDouble("prong_part_E") + 5);
       const double Eavail = univ.GetEavail();
-      return Eavail < 2;
+      return Eavail < 2000;
       //return true;
     }
   };
@@ -155,7 +155,7 @@ namespace reco
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
-      return (univ.GetElectronPt() > 0.2 && univ.GetElectronPt() < 1.6);
+      return (univ.GetElectronPt() > 200 && univ.GetElectronPt() < 1600); //MeV
     }
   };
 
@@ -228,13 +228,13 @@ namespace reco
   class ProtonMomentum: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ProtonMomentum(): PlotUtils::Cut<UNIVERSE, EVENT>("Reco proton momentum b/w 0.45 and 1.2 GeV/c") {}
+    ProtonMomentum(): PlotUtils::Cut<UNIVERSE, EVENT>("Reco proton momentum b/w 450 and 1200 MeV/c") {}
     
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
     {
       double protonP = univ.GetProtonP();
-      return (protonP>0.45 && protonP<1.2);
+      return (protonP>450 && protonP<1200);
     }
   };
 

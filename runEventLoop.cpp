@@ -133,15 +133,18 @@ void LoopAndFillEventSelection(
     for (auto band : error_bands)
     {
       std::vector<CVUniverse*> error_band_universes = band.second;
+      //int count = 0; //only used for testing/printing universe # within a band
       for (auto universe : error_band_universes)
       {
         CCNuEEvent myevent; // make sure your event is inside the error band loop. 
-    
         // Tell the Event which entry in the TChain it's looking at
         universe->SetEntry(i);
         // This is where you would Access/create a Michel
         //weight is ignored in isMCSelected() for all but the CV Universe.
 	//if ths event doesnt pass selection cuts, skip
+
+	//std::cout << "band/universe: " << band.first << "/" << count <<  ", Model Weight = " << cvWeight << std::endl;
+	//count++;
 
 	//isMCSelected returns a bitset which sideband cuts are passed. It is all 1s other than specifically the sideband cuts, ie we lose info about specific precuts (which is fine). 
 	//So if filling sidebands I don't want to check !results.all() because the sideband result will always be 1
@@ -166,6 +169,7 @@ void LoopAndFillEventSelection(
 	//g_OutputTreeManager.sidebandCutResults = sideband_results;
 	
 	const double weight = model.GetWeight(*universe, myevent); //Only calculate the per-universe weight for events that will actually use it.	
+	//const double weight = cvWeight; //Only calculate the per-universe weight for events that will actually use it.	
 	const bool isSignal = michelcuts.isSignal(*universe, weight);
 
 	int bkgd_ID;
@@ -203,7 +207,10 @@ void LoopAndFillEventSelection(
 	  std::cout << "Selected event: " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile")+1 << " , bkgd_ID = " << bkgd_ID << std::endl;
 	}
 	*/
-	
+
+	//std::cout << "band/universe: " << band.first << "/" << count <<  ", electron pT = " << universe->GetElectronPt() << std::endl;
+	//count++;
+
 	g_OutputTreeManager.Fill("Signal_Region", myevent.entryNumber); 
 
         for(auto& var: vars) var->selectedMCReco->FillUniverse(universe, var->GetRecoValue(*universe), weight); //"Fake data" for closure 
@@ -427,9 +434,11 @@ int main(const int argc, const char** argv)
   std::stringstream ss_1, ss_2, ss_3;
   std::time_t t = std::time(nullptr);
   std::tm tm = *std::localtime(&t);    
-  ss_1 << "MC_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
-  ss_2 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
-  ss_3 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  //ss_1 << "MC_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  ss_1 << "MC_" << std::put_time(&tm, "%b_%d") << ".root";
+  //ss_2 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  ss_2 << "Data_" << std::put_time(&tm, "%b_%d") << ".root";
+  ss_3 << "MC_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
   std::string mc_out_filename = ss_1.str();
   std::string data_out_filename = ss_2.str();
   std::string mc_tuple_out_filename = ss_3.str();
@@ -470,8 +479,8 @@ int main(const int argc, const char** argv)
 
   const double minEMTrackScore = 0.7;
   const double maxMeanFrontDEDX = 2.4; //in MeV/cm
-  const double minElectronEnergy = 2.5; //in GeV
-  const double maxModifiedEAvail = 1; //in GeV
+  const double minElectronEnergy = 2500; //in MeV
+  const double maxModifiedEAvail = 1000; //in MeV
   const double maxESCChi2 = 10;
 
   const int maxNIsoBlobs = 2; //cut is exclusive, ie not including 2
@@ -568,25 +577,26 @@ int main(const int argc, const char** argv)
 
   // Make a map of systematic universes
   // Leave out systematics when making validation histograms
-  //const bool doSystematics = (getenv("MNV101_SKIP_SYST") == nullptr); 
+  const bool doSystematics = (getenv("NOSYST") == nullptr); 
   //const bool doSystematics = false; //hard coding to false for now, we'll get to those eventually (carlos p, nov 2023)
-  const bool doSystematics = true; 
+  //const bool doSystematics = true; 
   if(!doSystematics){
-    std::cout << "Skipping systematics (except 1 flux universe) because environment variable MNV101_SKIP_SYST is set.\n";
+    std::cout << "Skipping systematics (except 1 flux universe) because environment variable NOSYST is set.\n";
     PlotUtils::MinervaUniverse::SetNFluxUniverses(2); //Necessary to get Flux integral later...  Doesn't work with just 1 flux universe though because _that_ triggers "spread errors".
   }
 
   std::map< std::string, std::vector<CVUniverse*> > error_bands;
   //defined in ./NuE_TKI/systematics/Systematics.h
-  //if(doSystematics) error_bands = GetStandardSystematics(options.m_mc);
-  if(doSystematics) error_bands = GetNueTKISystematics(options.m_mc);
+  //if(doSystematics) error_bands = GetNuETKISystematics(options.m_mc);
+  if(doSystematics) error_bands = GetTestSystematics(options.m_mc);
   else{
     std::map<std::string, std::vector<CVUniverse*> > band_flux = PlotUtils::GetFluxSystematicsMap<CVUniverse>(options.m_mc, CVUniverse::GetNFluxUniverses());
     error_bands.insert(band_flux.begin(), band_flux.end()); //Necessary to get flux integral later...
   }
   error_bands["cv"] = {new CVUniverse(options.m_mc)};
   std::map< std::string, std::vector<CVUniverse*> > truth_bands;
-  if(doSystematics) { truth_bands = GetStandardSystematics(options.m_truth); }
+  //if(doSystematics) { truth_bands = GetStandardSystematics(options.m_truth); }
+  if(doSystematics) { truth_bands = GetNuETKISystematics(options.m_truth); }
   //ExtractCrossSection throws an error when you run without systematics
   //Because it can't divide effNum/effDenom, as effDenom doesn't have a flux error band. So just adding this here. 
   if(!doSystematics) {
@@ -598,24 +608,24 @@ int main(const int argc, const char** argv)
   //binning vectors are defined in util/Binning.h
   std::vector<Variable*> vars = {
     //Reco variables
-    new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElectronEnergyTrue),
+    //new Variable("E_lep", "E_{e} [GeV]", electronEnergyBins, &CVUniverse::GetElectronEnergy, &CVUniverse::GetElectronEnergyTrue),
     new Variable("E_avail", "E_{avail} [GeV]", EavailBins, &CVUniverse::GetEavail, &CVUniverse::GetEavailTrue),
-    new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
-    new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", leptonPt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue),
-    new Variable("Lepton_Pl", "p_{|,e} [GeV/c]", Pl_bins, &CVUniverse::GetElectronPParallel, &CVUniverse::GetElectronPParallelTrue),
-    new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetElectronThetaDegTrue),    
-    new Variable("Proton_p", "p_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),
-    new Variable("Proton_Pt", "p_{T,p} [GeV/c]", leptonPt_bins, &CVUniverse::GetProtonPt, &CVUniverse::GetProtonPtTrue),
-    new Variable("Proton_Pl", "p_{|,p} [GeV/c]", Pl_bins, &CVUniverse::GetProtonPParallel, &CVUniverse::GetProtonPParallelTrue),
-    new Variable("Theta_p", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonThetaDeg, &CVUniverse::GetProtonThetaDegTrue),    
-    new Variable("Sum_T_proton", "#Sigma #T_{p} [MeV]", T_p_bins, &CVUniverse::GetSumProtonT, &CVUniverse::GetSumProtonTTrue), 
+    //new Variable("E_nu", "E_{#nu} [GeV]", electronEnergyBins, &CVUniverse::GetEnu, &CVUniverse::GetEnuTrue),
+    //new Variable("Lepton_Pt", "p_{T,e} [GeV/c]", leptonPt_bins, &CVUniverse::GetElectronPt, &CVUniverse::GetElectronPtTrue),
+    //new Variable("Lepton_Pl", "p_{|,e} [GeV/c]", Pl_bins, &CVUniverse::GetElectronPParallel, &CVUniverse::GetElectronPParallelTrue),
+    //new Variable("Theta_lep", "#theta_{e} [deg]", electronAngleBins, &CVUniverse::GetElectronThetaDeg, &CVUniverse::GetElectronThetaDegTrue),    
+    //new Variable("Proton_p", "p_{p} [GeV/c]", protonMomentumBins, &CVUniverse::GetProtonP, &CVUniverse::GetProtonPTrue),
+    //new Variable("Proton_Pt", "p_{T,p} [GeV/c]", leptonPt_bins, &CVUniverse::GetProtonPt, &CVUniverse::GetProtonPtTrue),
+    //new Variable("Proton_Pl", "p_{|,p} [GeV/c]", Pl_bins, &CVUniverse::GetProtonPParallel, &CVUniverse::GetProtonPParallelTrue),
+    //new Variable("Theta_p", "#theta_{p}", protonAngleBins, &CVUniverse::GetProtonThetaDeg, &CVUniverse::GetProtonThetaDegTrue),    
+    //new Variable("Sum_T_proton", "#Sigma #T_{p} [MeV]", T_p_bins, &CVUniverse::GetProtonT, &CVUniverse::GetProtonTTrue), 
 
     //tki vars start here
-    new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", deltaPt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDeltaPtTrue),
-    new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDeltaPtXTrue),
-    new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDeltaPtYTrue),
-    new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetAlphaTTrue),
-    new Variable("PhiPt", "#delta#phi_{T} [deg]", phiAngleBins, &CVUniverse::GetPhiT, &CVUniverse::GetPhiTTrue),
+    //new Variable("DeltaPt", "#deltaP_{T} [GeV/c]", deltaPt_bins, &CVUniverse::GetDeltaPt, &CVUniverse::GetDeltaPtTrue),
+    //new Variable("DeltaPtX", "#deltaP_{T,x} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtX, &CVUniverse::GetDeltaPtXTrue),
+    //new Variable("DeltaPtY", "#deltaP_{T,y} [GeV/c]", deltaPtXBins, &CVUniverse::GetDeltaPtY, &CVUniverse::GetDeltaPtYTrue),
+    //new Variable("AlphaPt", "#delta#alpha_{T} [deg]", protonAngleBins, &CVUniverse::GetAlphaT, &CVUniverse::GetAlphaTTrue),
+    //new Variable("PhiPt", "#delta#phi_{T} [deg]", phiAngleBins, &CVUniverse::GetPhiT, &CVUniverse::GetPhiTTrue),
     
     //true variables
     //new Variable("E_lep", "True Electron Energy", electronEnergyBins, &CVUniverse::GetElectronEnergyTrue, &CVUniverse::GetElectronEnergyTrue),
