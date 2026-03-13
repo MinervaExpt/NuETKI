@@ -31,16 +31,18 @@ UniverseMap GetTestSystematics(PlotUtils::ChainWrapper* chain)
   // CV
   error_bands[std::string("cv")].push_back(new CVUniverse(chain));
 
-  /*
+  //this is here to help me figure out why this affects my analysis...
+  //UniverseMap bands_minoseff = PlotUtils::GetMinosEfficiencySystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_minoseff.begin(), bands_minoseff.end());
+  
   const bool use_ID = true;
   const bool use_OD = true;
   std::string name_tag = "allNonMuonClusters";
   const bool use_neutron = false;
   const bool use_new = false;
   const bool use_proton = true;
-  UniverseMap bands_response = PlotUtils::GetResponseSystematicsMap<CVUniverse>(chain, use_ID, use_OD, name_tag, use_neutron, use_new, use_proton);
-  error_bands.insert(bands_response.begin(), bands_response.end());
-  */
+  //UniverseMap bands_response = PlotUtils::GetResponseSystematicsMap<CVUniverse>(chain, use_ID, use_OD, name_tag, use_neutron, use_new, use_proton);
+  //error_bands.insert(bands_response.begin(), bands_response.end());
 
   //UniverseMap bands_mass = PlotUtils::GetTargetMassSystematicsMap<CVUniverse>(chain);
   //error_bands.insert(bands_mass.begin(), bands_mass.end());
@@ -48,9 +50,15 @@ UniverseMap GetTestSystematics(PlotUtils::ChainWrapper* chain)
   //UniverseMap bands_electron = PlotUtils::GetElectronEnergyShiftSystematicsMap<CVUniverse>(chain);
   //error_bands.insert(bands_electron.begin(), bands_electron.end());
   
-  UniverseMap bands_leakage = PlotUtils::GetLeakageSystematicsMap<CVUniverse>(chain);
-  error_bands.insert(bands_leakage.begin(), bands_leakage.end());  
+  //UniverseMap bands_leakage = PlotUtils::GetLeakageSystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_leakage.begin(), bands_leakage.end());  
+  
+  //UniverseMap bands_electron_angle = PlotUtils::GetElectronAngleShiftSystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_electron_angle.begin(), bands_electron_angle.end());  
 
+  UniverseMap bands_lowq2 = PlotUtils::GetLowQ2PiSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_lowq2.begin(), bands_lowq2.end());
+  
   return error_bands;
 }
 
@@ -90,13 +98,17 @@ UniverseMap GetNuETKISystematics(PlotUtils::ChainWrapper* chain)
   UniverseMap bands_2p2h = PlotUtils::Get2p2hSystematicsMap<CVUniverse>(chain);
   error_bands.insert(bands_2p2h.begin(), bands_2p2h.end());
 
+  // Low Q2 pion suppression (i think this is a tune that I don't have...
+  UniverseMap bands_lowq2 = PlotUtils::GetLowQ2PiSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_lowq2.begin(), bands_lowq2.end());
+  
   //========================================================================
   // Muons
   //========================================================================
   // Muon reco in MINERvA -- Catchall systematic for pmu reco in minerva.
   // Lateral-only. Shifts pmu.
-  UniverseMap bands_muon_minerva = PlotUtils::GetMinervaMuonSystematicsMap<CVUniverse>(chain);
-  error_bands.insert(bands_muon_minerva.begin(), bands_muon_minerva.end());
+  //UniverseMap bands_muon_minerva = PlotUtils::GetMinervaMuonSystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_muon_minerva.begin(), bands_muon_minerva.end());
 
   //UniverseMap bands_electron = PlotUtils::GetMinervaMuonSystematicsMap<CVUniverse>(chain);
   //error_bands.insert(bands_muon_minerva.begin(), bands_muon_minerva.end());
@@ -107,13 +119,13 @@ UniverseMap GetNuETKISystematics(PlotUtils::ChainWrapper* chain)
   // Expect a non-zero systematic even when no pmu involved.
   //
   //Carlos - Can I remove these??? Apparently it has flux implications, and the universes do change a bit
-  UniverseMap bands_muon_minos = PlotUtils::GetMinosMuonSystematicsMap<CVUniverse>(chain);
-  error_bands.insert(bands_muon_minos.begin(), bands_muon_minos.end());
-  UniverseMap bands_minoseff = PlotUtils::GetMinosEfficiencySystematicsMap<CVUniverse>(chain);
-  error_bands.insert(bands_minoseff.begin(), bands_minoseff.end());
+  //UniverseMap bands_muon_minos = PlotUtils::GetMinosMuonSystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_muon_minos.begin(), bands_muon_minos.end());
+  //UniverseMap bands_minoseff = PlotUtils::GetMinosEfficiencySystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_minoseff.begin(), bands_minoseff.end());
 
-  UniverseMap bands_muon_resolution = PlotUtils::GetMuonResolutionSystematicsMap<CVUniverse>(chain);
-  error_bands.insert(bands_muon_resolution.begin(), bands_muon_resolution.end());
+  //UniverseMap bands_muon_resolution = PlotUtils::GetMuonResolutionSystematicsMap<CVUniverse>(chain);
+  //error_bands.insert(bands_muon_resolution.begin(), bands_muon_resolution.end());
   
   UniverseMap bands_geant = PlotUtils::GetGeantHadronSystematicsMap<CVUniverse>(chain);
   error_bands.insert(bands_geant.begin(), bands_geant.end());
@@ -127,8 +139,7 @@ UniverseMap GetNuETKISystematics(PlotUtils::ChainWrapper* chain)
   // Particle Response Systematics
   //========================================================================
   //Using Anezka's reworked recoil systematics after p4 tuples
-  // check that I implemented these right? I think I did the right thing here, since I followed her tutorial
-  // but I think maybe I don't have in my CVUniverse.h the function that these overload or something?
+  // these are working, but as it stands I don't actually use these exact quantities anywhere in my analysis. See the spreadsheet for details
   const bool use_ID = true;
   const bool use_OD = true;
   std::string name_tag = "allNonMuonClusters";
@@ -138,6 +149,18 @@ UniverseMap GetNuETKISystematics(PlotUtils::ChainWrapper* chain)
   UniverseMap bands_response = PlotUtils::GetResponseSystematicsMap<CVUniverse>(chain, use_ID, use_OD, name_tag, use_neutron, use_new, use_proton);
   error_bands.insert(bands_response.begin(), bands_response.end());
 
+  UniverseMap bands_mass = PlotUtils::GetTargetMassSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_mass.begin(), bands_mass.end());
+
+  UniverseMap bands_electron = PlotUtils::GetElectronEnergyShiftSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_electron.begin(), bands_electron.end());
+  
+  UniverseMap bands_leakage = PlotUtils::GetLeakageSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_leakage.begin(), bands_leakage.end());  
+  
+  UniverseMap bands_electron_angle = PlotUtils::GetElectronAngleShiftSystematicsMap<CVUniverse>(chain);
+  error_bands.insert(bands_electron_angle.begin(), bands_electron_angle.end());  
+  
   return error_bands;
 }
 //Legacy, this is what was in the tutorial
