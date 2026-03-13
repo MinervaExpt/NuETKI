@@ -6,27 +6,23 @@
 #tbh might not even finish it cause I should move back to the actual MAT event loop at some point. 
 #from ROOT import *
 
-#to make it not display the canvases as it draws and saves them, saves a bunch of time
-import sys
-sys.argv.append( '-b' )
 
 import ROOT
 from ROOT import PlotUtils
-
-import sys
 from array import array
 import math
 import ctypes
+import sys
 
+#to make it not display the canvases as it draws and saves them, saves a bunch of time
+ROOT.gROOT.SetBatch(True)
 
 drawData = False
 #drawData = True
 
-#cutsToDraw = ["NoVertexMismatch","VertexZ","InApothem","StartPointVertexMultiplicity","Afterpulsing","Deadtime","NoBackExitingTracks","DSCalVisE","ODCalVisE","VertexTrackMultiplicity","TransverseGapScore","NonMIPClusFrac","EMScore","NMichels","MeanFrontDEDX","E_lep","Modified_E_avail","ESCChi2","nonProton_extraCuts","proton_extraCuts"]
-
 #cutsToDraw = ["NoVertexMismatch","VertexZ","InApothem","StartPointVertexMultiplicity","Afterpulsing","Deadtime","NoBackExitingTracks","DSCalVisE","ODCalVisE","VertexTrackMultiplicity","TransverseGapScore","NonMIPClusFrac","EMScore","NMichels","MeanFrontDEDX","E_lep","Modified_E_avail","ESCChi2","Psi", "ProtonMomentum","ProtonTheta","LeptonPt","Etheta"]
-#cutsToDraw = ["ESCChi2","Psi", "ProtonMomentum","ProtonTheta","LeptonPt","Etheta"]
-cutsToDraw = ["VertexTrackMultiplicity"]
+#cutsToDraw = ["Afterpulsing", "DSCalVisE", "E_lep", "EMLikeTrackScore", "ESC", "MeanFrontdEdX", "MichelCut", "ModifiedEavailable", "NIsoBlobs", "NonMIPClusFrac", "ODCalVisE", "StartPointVertexMultiplicity", "TransverseGapScore", "VertexTrackMultiplicity", "Psi", "Lepton_Pt", "Etheta", "ProtonMomentum", "ProtonTheta"]
+cutsToDraw = ["ESC", "MeanFrontdEdX", "ModifiedEavailable"]
 
 for cut in cutsToDraw:
 
@@ -35,47 +31,48 @@ for cut in cutsToDraw:
     print(signalHistoNames)
 
     #can't think of a better way to do this... I have to put the cut arrows in a different spot for each plot, so here we go:
-    """
-    if cut="NoVertexMismatch":
+    
+    if cut=="NoVertexMismatch":
         cutArrowLoc = 1 #where the cut is on x axis
         cutArrowDirection = "R" #"L" or "R"
         cutArrowHeight = 45 #height on the histogram (in terms of y axis units, aka n events)
         cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="VertexZ":
+    if cut=="VertexZ":
         cutArrowLoc = 5980 #where the cut is on x axis
         cutArrowDirection = "R" #"L" or "R"
         cutArrowHeight = 98 #height on the histogram (in terms of y axis units, aka n events)
         cutArrowLength = 200 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="InApothem":
+    if cut=="InApothem":
         cutArrowLoc = 1 #where the cut is on x axis
         cutArrowDirection = "R" #"L" or "R"
         cutArrowHeight = 600 #height on the histogram (in terms of y axis units, aka n events)
         cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="StartPointVertexMultiplicity":
+    if cut=="StartPointVertexMultiplicity":
         cutArrowLoc = 1 #where the cut is on x axis
         cutArrowDirection = "L" #"L" or "R"
         cutArrowHeight = 600 #height on the histogram (in terms of y axis units, aka n events)
         cutArrowLength = 0.5 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="NoVertexMismatch":
-        cutArrowLoc = 1 #where the cut is on x axis
+    if cut=="ESC":
+        cutArrowLoc = 20 #where the cut is on x axis
+        cutArrowDirection = "L" #"L" or "R"
+        cutArrowHeight = 200 #height on the histogram (in terms of y axis units, aka n events)
+        cutArrowLength = 2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
+    if cut=="MeanFrontdEdX":
+        cutArrowLoc = 2.4 #where the cut is on x axis
+        cutArrowDirection = "L" #"L" or "R"
+        cutArrowHeight = 150 #height on the histogram (in terms of y axis units, aka n events)
+        cutArrowLength = 0.3 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
+    if cut=="ModifiedEavailable":
+        cutArrowLoc = 600 #where the cut is on x axis
+        cutArrowDirection = "L" #"L" or "R"
+        cutArrowHeight = 150 #height on the histogram (in terms of y axis units, aka n events)
+        cutArrowLength = 50 #cut arrow horizontal length on the part that sticks out, in terms of x axis units    
+    if cut=="EMLikeTrackScore":
+        cutArrowLoc = 0.7 #where the cut is on x axis
         cutArrowDirection = "R" #"L" or "R"
-        cutArrowHeight = 45 #height on the histogram (in terms of y axis units, aka n events)
-        cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="NoVertexMismatch":
-        cutArrowLoc = 1 #where the cut is on x axis
-        cutArrowDirection = "R" #"L" or "R"
-        cutArrowHeight = 45 #height on the histogram (in terms of y axis units, aka n events)
-        cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="NoVertexMismatch":
-        cutArrowLoc = 1 #where the cut is on x axis
-        cutArrowDirection = "R" #"L" or "R"
-        cutArrowHeight = 45 #height on the histogram (in terms of y axis units, aka n events)
-        cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
-    if cut="NoVertexMismatch":
-        cutArrowLoc = 1 #where the cut is on x axis
-        cutArrowDirection = "R" #"L" or "R"
-        cutArrowHeight = 45 #height on the histogram (in terms of y axis units, aka n events)
-        cutArrowLength = 0.2 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
+        cutArrowHeight = 100 #height on the histogram (in terms of y axis units, aka n events)
+        cutArrowLength = 0.1 #cut arrow horizontal length on the part that sticks out, in terms of x axis units
+    """
     if cut="NoVertexMismatch":
         cutArrowLoc = 1 #where the cut is on x axis
         cutArrowDirection = "R" #"L" or "R"
@@ -132,38 +129,23 @@ for cut in cutsToDraw:
         dataHistoNames.append(i.replace("selected_signal_reco", "data"))
         
 
-    #print(NueCC0PiHistoNames)
-    #print(otherNueCCHistoNames)
-    #print(NCPi0HistoNames)
-    #print(CCnumuPi0HistoNames)
-    #print(otherBackgroundHistoNames.append)
-    #print(dataHistoNames)
-    
     #if drawData:
     #dataFile = ROOT.TFile.Open(sys.argv[1])
     #mcFile = ROOT.TFile.Open(sys.argv[2])
-    if cut == "Psi" or cut == "LeptonPt" or cut == "Etheta":
-        dataFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/Data_May_01_2025_me1M_me1M_Modified_nonProton_extraCuts.root")
-        mcFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/MC_May_01_2025_me1M_nonProton_extraCuts.root")
-    elif cut == "ProtonMomentum" or cut == "ProtonTheta":
-        dataFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/Data_May_01_2025_me1M_me1M_Modified_proton_extraCuts.root")
-        mcFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/MC_May_01_2025_me1M_proton_extraCuts.root")
+    if cut == "Psi" or cut == "Lepton_Pt" or cut == "Etheta" or cut == "ProtonMomentum" or cut == "ProtonTheta":
+        dataFile = ROOT.TFile.Open("/exp/minerva/data/users/cpernas/NuE_TKI/N-1_Feb_22/ExtraCuts/Data_Feb_23.root")
+        mcFile = ROOT.TFile.Open("/exp/minerva/data/users/cpernas/NuE_TKI/N-1_Feb_22/ExtraCuts/MC_Feb_23.root")
     else:        
-        #dataFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/Data_May_01_2025_me1M_me1M_Modified_"+cut+".root")
-        #mcFile = ROOT.TFile.Open("/pnfs/minerva/persistent/users/cpernas/default_analysis_loc/MC_May_01_2025_me1M_"+cut+".root")
-        dataFile = ROOT.TFile.Open("/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/Data_June_12_2025_"+cut+".root")
-        mcFile = ROOT.TFile.Open("/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/MC_June_12_2025_"+cut+".root")
-#Data_May_01_2025_me1M_me1M_Modified_ESCChi2.root
+        dataFile = ROOT.TFile.Open("/exp/minerva/data/users/cpernas/NuE_TKI/N-1_Feb_22/"+cut+"/MC_Feb_23.root")
+        mcFile = ROOT.TFile.Open("/exp/minerva/data/users/cpernas/NuE_TKI/N-1_Feb_22/"+cut+"/MC_Feb_23.root")
     print(dataFile)
     print(mcFile)
-    #dataFile = ROOT.TFile.Open("/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/Data_Jan_23_2025_EAvail_WITHCUT.root")
-    #mcFile = ROOT.TFile.Open("/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MC_Jan_23_2025_EAvail_WITHCUT.root")
 
 
     plotter = PlotUtils.MnvPlotter()
-
     #plotter.ApplyStyle(PlotUtils.kCCNuPionIncStyle)
-    plotter.legend_text_size = 0.02
+    plotter.legend_text_size = 0.018
+    plotter.legend_offset_x = 0.07
     if drawData:
         plotter.data_line_width = 2
         plotter.data_marker_size = 2
@@ -208,14 +190,6 @@ for cut in cutsToDraw:
         CCnumuPi0.SetTitle('nu_mu CC with pi0')
         otherBkgd.SetTitle('other')
 
-        #cause my dumb ass made em TH1D's instead of MnvH1D's
-        #signalWithProton = PlotUtils.MnvH1D(signalWithProton)
-        #withoutProton = PlotUtils.MnvH1D(withoutProton)
-        #otherNueCC = PlotUtils.MnvH1D(otherNueCC)
-        #NCCoh = PlotUtils.MnvH1D(NCCoh)
-        #OtherNC = PlotUtils.MnvH1D(OtherNC)
-        #otherBkgd = PlotUtils.MnvH1D(otherBkgd)
-
         array = ROOT.TObjArray()
         array.Add(otherBkgd)
         array.Add(CCnumuPi0)
@@ -229,19 +203,7 @@ for cut in cutsToDraw:
 
         
         #to get variable name for the x axis
-        head, sep, tail = signalHistoNames[i].partition('_selected')
-        
-        #if head == "E_avail" or head == "E_lep" or head == "E_nu":
-        #head+=" [GeV]"
-        #elif head == "Lepton_Pt":
-        #head+=" [GeV/c]"
-        #elif head == "Theta_lep":
-        #head+= " [deg]"
-
-        #some plotter options
-
-        #arguments for stackedMC array are:
-        #DrawStackedMC(mcHists, mcScale, legend position, base color, color offset, fill style, xaxislabel, yaxislabel)
+        head, sep, tail = signalHistoNames[i].partition('_selected')            
         
         #else:
         data = dataFile.Get(dataHistoNames[i])
@@ -252,29 +214,29 @@ for cut in cutsToDraw:
 
         #plotter.axis_minimum=0.001
             
-        #data = ROOT.TH1D("test","test", signal.GetNbinsX(), 
-        #plotter.DrawStackedMC(array, 1.0, "TR", 2, 1, 1001, head, "N events")
-
         #plotter.SetYRangeUser(0, 1000)
         #plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, head, "N events")
-        plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, signal.GetXaxis().GetTitle(), "N events")
+        if cut=="ModifiedEavailable":
+            plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, "EAvail - Proton Energy [MeV]", "N events")
+            
+        else:               
+            plotter.DrawDataStackedMC(data, array, arr, mcScale, "TR", "Data", 1001, signal.GetXaxis().GetTitle(), "N events")
 
         
         #void MnvPlotter::AddCutArrow(const double cut_location, const double y1, const double y2, const double arrow_length, const std::string& arrow_direction)
         #i think y1 is bottom of line, y2 is top? in the y axis, not pixels or anything. So if my stuff goes up to 500 events, do 500 or smth
         #arrow length is the horizontal part sticking out
-        #plotter.arrow_line_color = 415
-        #plotter.AddCutArrow(cutArrowLoc, 0, cutArrowHeight, cutArrowLength, cutArrowDirection)
+        plotter.arrow_line_color = 415
+        plotter.AddCutArrow(cutArrowLoc, 0, cutArrowHeight, cutArrowLength, cutArrowDirection)
         #plotter.AddCutArrow(cutArrowLoc, 0, cutArrowHeight, cutArrowLength, cutArrowDirection) #some cuts will need two cut arrows, if i cut both low and high
 
-    
         #canvas.SetLogy()
+        plotter.WritePreliminary("TC", 0.035, 0.01, -0.14, True)
+
 
         outName = outName + ".png"
         canvas.SaveAs(outName)
-        
         canvas.Delete()
-        #plotter.WritePreliminary()
 
     dataFile.Close()
     mcFile.Close()
