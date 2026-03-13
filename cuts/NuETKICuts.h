@@ -22,8 +22,8 @@
 
 #include "PlotUtils/Cut.h"
 #include <sstream>
-#ifndef BEN_CCINCLUSIVECUTS_H
-#define BEN_CCINCLUSIVECUTS_H
+#ifndef NuETKICuts_H
+#define NuETKICuts_H
 
 namespace utils {
   std::string to_string_trimmed(double x, int precision = 2) {
@@ -134,7 +134,7 @@ namespace reco
   {
     public:
     // Constructor                                                                                                                                                  
-    ModifiedEavailable(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Non Proton Available energy < " + utils::to_string_trimmed(max) + " GeV"), fMax(max) {}
+    ModifiedEavailable(const double max): PlotUtils::Cut<UNIVERSE, EVENT>("Non Proton Available energy < " + utils::to_string_trimmed(max) + " MeV"), fMax(max) {}
 
     private:
     // THE cut function                                                                                                                                             
@@ -164,7 +164,7 @@ namespace reco
   class ElectronEnergy: public PlotUtils::Cut<UNIVERSE, EVENT>
   {
     public:
-    ElectronEnergy(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Lepton energy > " + utils::to_string_trimmed(min) + " GeV"), fMin(min) {}
+    ElectronEnergy(const double min): PlotUtils::Cut<UNIVERSE, EVENT>("Lepton energy > " + utils::to_string_trimmed(min) + " MeV"), fMin(min) {}
 
     private:
     bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
@@ -574,6 +574,20 @@ namespace reco
     const double fMax;
   };
 
+  //Side Exiting Muon
+  template <class UNIVERSE, class EVENT = PlotUtils::detail::empty>
+  class SideExitingMuon: public PlotUtils::Cut<UNIVERSE, EVENT>
+  {
+    public:
+    SideExitingMuon(): PlotUtils::Cut<UNIVERSE, EVENT>("Side Exiting Muon cut") {}
+
+    private:
+    bool checkCut(const UNIVERSE& univ, EVENT& /*evt*/) const override
+    {
+      return univ.GetSideExitingMuon();
+    }
+  };
+
 
 #ifndef __GCCXML__
   //============================================================================
@@ -616,8 +630,9 @@ namespace reco
   //               [ 0, 0.075, 0.15, 0.25, 0.325, 0.4, 0.475, 0.55, 0.7, 0.85, 1, 1.25, 1.5, 2.5, 4.5]
 
 }
+
 #ifdef __GCCXML__
 #undef override
 #endif
 
-#endif //BEN_CCINCLUSIVECUTS_H
+#endif //NuETKICuts_H
