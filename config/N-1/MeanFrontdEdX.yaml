@@ -1,0 +1,103 @@
+---
+#The N-1 yamls are used to help me make N-1 plots, where every cut EXCEPT one is applied
+#For event loops run with a single cut removed, that cut is the only variable plotted
+#And they all have systematics and sidebands turned off
+
+variables:
+  MeanFrontdEdX: true
+
+precuts:
+  HasTracks:
+    enabled: true
+
+  NoVertexMismatch:
+    enabled: true
+
+  ZRange:
+    enabled: true
+    minZ: 5980 #in mm
+    maxZ: 8422 #in mm
+
+  Apothem:
+    enabled: true
+    apothem: 850 #in mm
+    
+  StartPointVertexMultiplicity:
+    enabled: true
+    
+  Afterpulsing:
+    enabled: true
+    minFirstFireFraction: 0.25 #more than 25% of electron candidate hits are first fire hits (first time firing in gate)
+    
+  NoDeadtime:
+    enabled: true #no more than 1 dead channel upstream of electron track
+
+  HasNoBackExitingTracks:
+    enabled: true
+
+  DSCalVisE:
+    enabled: true
+    maxDSCalRatio: 0.2 #ratio of energy in DS hcal / DS ecal
+    
+  ODCalVisE:
+    enabled: true
+    maxSideCalRatio: 0.05 #ratio of energy in OD hcal / side ecal
+
+  VertexTrackMultiplicity:
+    enabled: true
+    minVertexTrackMultiplicity: 0 
+    maxVertexTrackMultiplicity: 2 #max number of tracks leaving the neutrino vertex
+
+  TransverseGapScore:
+    enabled: true
+    minTransverseGapScore: 15 #unitless spread score
+
+  NonMIPClusterFraction:
+    enabled: true
+    minNonMIPClusFrac: 0.7 # fraction of energy from trackable clusters / electron energy
+
+  EMLikeTrackScore:
+    enabled: true
+    minEMTrackScore: 0.7 #kNN track score
+
+  MichelCut:
+    enabled: true
+
+  MeanFrontdEdX:
+    enabled: false
+    maxMeanFrontDEDX: 2.4 # in MeV/cm
+
+  ElectronEnergy:
+    enabled: true
+    minElectronEnergy: 2500 #in MeV
+
+  ModifiedEavailable:
+    enabled: true
+    maxModifiedEAvail: 1000 #in MeV
+
+  ProtonInEvent:
+    enabled: true 
+
+  NIsoBlobs:
+    enabled: true
+    maxNIsoBlobs: 2
+
+  ESC:
+    enabled: true
+    maxESCChi2: 10 #proton ESC track chi^2
+
+sideband_cuts:
+  MichelCut:
+    enabled: false
+
+  MeanFrontdEdX:
+    enabled: false
+    maxMeanFrontDEDX: 2.4 #in MeV/cm
+  
+sidebands: #sideband histograms to fill
+  MeanFrontDEDXSB: false
+  MichelSB: false
+  NIsoClusSB: false
+  NPiSB: false
+
+systematics: false

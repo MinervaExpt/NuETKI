@@ -59,6 +59,9 @@ include_directories(${UnfoldUtils_INCLUDE_DIR})
 find_package(GENIEXSecExtract REQUIRED)
 include_directories(${GENIEXSecExtract_INCLUDE_DIR})
 
+find_package(yaml-cpp REQUIRED)
+#target_link_libraries(runEventLoop PRIVATE yaml-cpp)
+
 #Tell CMake to compile subdirectories before compiling main application
 #add_subdirectory(playlists) 
 add_subdirectory(util)
@@ -70,7 +73,7 @@ add_subdirectory(util)
 
 #Build main executables
 add_executable(runEventLoop runEventLoop.cpp)
-target_link_libraries(runEventLoop ${ROOT_LIBRARIES} util MAT MAT-MINERvA) #event cuts studies systematics)
+target_link_libraries(runEventLoop ${ROOT_LIBRARIES} util MAT MAT-MINERvA yaml-cpp) #event cuts studies systematics)
 install(TARGETS runEventLoop DESTINATION bin)
 
 add_executable(ExtractCrossSection ExtractCrossSection.cpp)

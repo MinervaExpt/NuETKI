@@ -1,0 +1,83 @@
+---
+variables:
+  E_lep: true
+  E_avail: true
+
+precuts:
+  HasTracks:
+    enabled: true
+
+  HasNoBackExitingTracks:
+    enabled: true
+
+  EMLikeTrackScore:
+    enabled: true
+    minEMTrackScore: 0.7
+
+  DSCalVisE:
+    enabled: true
+    maxDSCalRatio: 0.1
+    
+  ODCalVisE:
+    enabled: true
+    maxSideCalRatio: 0.1
+
+  VertexTrackMultiplicity:
+    enabled: true
+    minVertexTrackMultiplicity: 2
+    maxVertexTrackMultiplicity: 6
+
+  Afterpulsing:
+    enabled: true
+    minFirstFireFraction: 0.25
+    
+  NoDeadtime:
+    enabled: true
+
+  StartPointVertexMultiplicity:
+    enabled: true
+    
+  MeanFrontdEdX:
+    enabled: true
+    maxMeanFrontDEDX: 2.4
+
+  NonMIPClusterFraction:
+    enabled: true
+    minNonMIPClusFrac: 0.4
+
+  TransverseGapScore:
+    enabled: true
+    minTransverseGapScore: 15
+
+  ZRange:
+    enabled: true
+    minZ: 5980
+    maxZ: 8422
+
+  Apothem:
+    enabled: true
+    apothem: 850
+
+  Eavailable:
+    enabled: true
+    maxEAvail: 2000
+    
+  ElectronEnergy:
+    enabled: true
+    minElectronEnergy: 2500
+
+sideband_cuts:
+  MichelCut:
+    enabled: false
+
+  MeanFrontdEdX:
+    enabled: false
+    maxMeanFrontDEDX: 2.4
+  
+sidebands: #sideband histograms to fill
+  MeanFrontDEDXSB: false
+  MichelSB: false
+  NIsoClusSB: false
+  NPiSB: false
+
+systematics: false
