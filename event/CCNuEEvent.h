@@ -21,6 +21,14 @@ struct OutputTreeManager {
   //Dummy initialization value, I should never see this value in the output tuple and if I do something got messed up
   int selectionCategory = -60;
 
+  // real selectionCategory values:
+  // -999 = signal (green)
+  // 0 = NonQE (yellow) bkgd
+  // 1 = other NuE CC (red) bkgd
+  // 2 = NC Pi0 (pink) bkgd
+  // 3 = NuMu CC Pi0 (teal) bkgd
+  // -1 = other backgrounds (dark blue)
+
   //This is pretty temporary, and will most likely change frequently. I want to save a tuple of events, including many that don't pass the full selection
   //But save what WOULD have been the results of the cut. I was originally thinking of doing this as a bitset, but since I know I'll only need 6 (or fewer)
   //bits, I guess I'll just save it as 6 additional branches, whatever. 
