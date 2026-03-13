@@ -1,6 +1,6 @@
 #sample command to run:
 
-#python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1A --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/default_analysis_loc
+#python SubmitJobsToGrid.py --stage eventLoop --playlist minervame1A --basedir /exp/minerva/app/users/cpernas/MAT_AL9/ --outdir /pnfs/minerva/persistent/users/cpernas/default_analysis_loc --config /exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/config/analysis.yaml
 
 # other options: --pdg, --
 import os,sys,time
@@ -18,33 +18,26 @@ def writeTransWarp(mywrapper,outdir):
     mywrapper.write("\n")
     mywrapper.write("ifdh cp ./*.root "+outdir)
 
-def writeEventLoop(mywrapper,outdir,playlist,pdg,filename):
-    #mywrapper.write("./Event_Selection_Tracker_anyMode . "+playlist+" "+pdg+" "+str(filename))
-
-    #Determine playlist from input...
-    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_mc_"+playlist+".txt |& tee CutSummary.txt")
-
+def writeEventLoop(mywrapper,outdir,playlist,pdg,filename,config):
+    #Determine playlist from input
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/MAD_mc_"+playlist+".txt ${CONDOR_DIR_INPUT}"+config+" |& tee CutSummary.txt")
+    mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p7/MAD_data_"+playlist+".txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p7/MAD_mc_"+playlist+".txt ${CONDOR_DIR_INPUT}"+config+" |& tee CutSummary.txt")
     
     #one run of data and MC each, for testing
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_data.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_mc.txt |& tee CutSummary.txt")
-    
-    #same as above just different runs, for cross checking
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/data_test_2.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mc_test_2.txt")
-
-    #one quarter me1A, using xrd
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/data_one_fourth_me1A.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/xrd_paths/mc_one_fourth_me1A.txt |& tee CutSummary.txt")
-    
-    #Full me1A, using xrd
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_data_minervame1A.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/xrd_paths/p6/mad_mc_minervame1A.txt |& tee CutSummary.txt")
-
-    #full me1A, direct pnfs paths with no xrd
-    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/test_data.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p6/test_MC.txt |& tee CutSummary.txt")
-
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_data.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/test_mc.txt ${CONDOR_DIR_INPUT}"+config+" |& tee CutSummary.txt")
+    #mywrapper.write("runEventLoop ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p7/test_data.txt ${CONDOR_DIR_INPUT}/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/playlists/p7/test_mc.txt ${CONDOR_DIR_INPUT}"+config+" |& tee CutSummary.txt")
     
     mywrapper.write("\n")
     mywrapper.write("echo \"carlos - pwd, then printing out contents of current dir\"\n")
     mywrapper.write("pwd\n")
     mywrapper.write("ls -l\n")
+    
+    #This little block adds a section to the job script to exit with an error if either of my root files don't exist
+    mywrapper.write("if ! compgen -G \"Data*.root\" > /dev/null || ! compgen -G \"MC*.root\" > /dev/null; then\n")
+    mywrapper.write("    echo \"Missing Data_*.root or MC_*.root — exiting.\"\n")
+    mywrapper.write("    exit 1\n")
+    mywrapper.write("fi\n")
+
     mywrapper.write("echo \"carlos - now trying to copy output to pnfs\"\n")
     mywrapper.write("ifdh cp ./*.root "+outdir)
     #Carlos added so I could get my cut summary
@@ -144,6 +137,7 @@ def writeTarballProceedure(mywrapper,tag,basedir):
 def writeOptions(parser):
     print("Now write options to the parser") 
     # Directory to write output
+    parser.add_option('--config', dest='config', help='path to yaml config file', default = "/exp/minerva/app/users/"+_user_+"/MAT_AL9/NuE_TKI/config/analysis.yaml")
     parser.add_option('--outdir', dest='outdir', help='Directory to write output to', default = "/pnfs/minerva/persistent/users/"+_user_+"/default_analysis_loc/")
     parser.add_option('--basedir', dest='basedir', help='Base directory for making tarball', default = "NONE")
     parser.add_option('--stage', dest='stage', help='Process type', default="NONE")
@@ -235,7 +229,7 @@ writeTarballProceedure(mywrapper,tag_name,opts.basedir)
 
 # Now the add the command to run event loop 
 if(opts.stage=="eventLoop"):
-    writeEventLoop(mywrapper,opts.outdir,opts.playlist,opts.pdg,opts.filename)
+    writeEventLoop(mywrapper,opts.outdir,opts.playlist,opts.pdg,opts.filename,opts.config)
 elif (opts.stage=="migration"):
     writeMigration(mywrapper,opts.outdir,opts.playlist,opts.pdg,opts.filename)
 elif (opts.stage=="efficiency"): 
@@ -260,6 +254,7 @@ cmd = ""
 cmd += "jobsub_submit --group minerva " #Group of experiment
 #cmd += "--debug "
 #cmd += "--cmtconfig "+gccstring+" " #Setup minerva soft release built with minerva configuration
+cmd += "--blocklist RAL " #RAL has screwed me one too many times...
 
 #cmd += "--OS sl7 " #Operating system #Not needed in SL7
 #cmd += "--singularity-image /cvmfs/singularity.opensciencegrid.org/fermilab/fnal-wn-sl7:latest "
@@ -280,7 +275,7 @@ cmd += "-f "+opts.outdir+"/myareatar_"+tag_name+".tar.gz "
 #cmd += "-i /cvmfs/minerva.opensciencegrid.org/minerva/software_releases/v22r1p1"+" " 
 cmd += "file://"+os.environ["PWD"]+"/"+wrapper_name
 #print("jobsub command, not actually running for now though: ")
-print(cmd)
+#print(cmd)
 
 #run the jobsub command
 os.system(cmd)
