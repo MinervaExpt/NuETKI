@@ -74,7 +74,7 @@ void Plot(PlotUtils::MnvH1D& hist, const std::string& stepName, const std::strin
   plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Cross Section Models");
   can.Print((prefix + "_" + stepName + "_xsec_uncertainties.png").c_str());
 
-  plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "FSI Models");
+  plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Genie FSI Models");
   can.Print((prefix + "_" + stepName + "_fsi_uncertainties.png").c_str());
 
   plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Minerva Tunes");
@@ -83,6 +83,45 @@ void Plot(PlotUtils::MnvH1D& hist, const std::string& stepName, const std::strin
   plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Detector Model");
   can.Print((prefix + "_" + stepName + "_detector_uncertainties.png").c_str());
   
+  //plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Vestigial Muon");
+  //can.Print((prefix + "_" + stepName + "_muon_uncertainties.png").c_str());
+}
+
+//Plot the final cross section, I want to plot these differently (read: prettier) so this is my solution
+void PlotXSec(PlotUtils::MnvH1D& dataXSec, PlotUtils::MnvH1D& mcXSec, const std::string& prefix)
+{
+  TCanvas can("crossSection");
+  dataXSec.GetCVHistoWithError().Clone()->Draw();
+  mcXSec.SetLineColor(kRed);
+  mcXSec.SetLineWidth(3);
+  mcXSec.Draw("hist same");
+  can.Print((prefix + "_crossSection.png").c_str());
+
+  //Uncertainty summary
+  PlotUtils::MnvPlotter plotter;
+  plotter.ApplyStyle(PlotUtils::kCCQENuEStyle);
+  plotter.axis_maximum = 0.4;
+
+  plotter.DrawErrorSummary(&dataXSec);
+  can.Print((prefix + "_crossSection_uncertaintySummary.png").c_str());
+
+  //Draw Specific Errors
+  //DrawErrorSummary( hist, legPos, includeStat, solidLinesOnly, ignoreThreshold, covAreaNormalize, errorGroupName, asfrac, Ytitle, ignoreUngrouped, histDrawOption)
+  plotter.axis_maximum = 0.12;
+  plotter.DrawErrorSummary(&dataXSec, "TR", true, true, 1e-5, false, "Cross Section Models");
+  can.Print((prefix + "_crossSection_xsec_uncertainties.png").c_str());
+
+  plotter.DrawErrorSummary(&dataXSec, "TR", true, true, 1e-5, false, "Genie FSI Models");
+  can.Print((prefix + "_crossSection_fsi_uncertainties.png").c_str());
+
+  plotter.DrawErrorSummary(&dataXSec, "TR", true, true, 1e-5, false, "Minerva Tunes");
+  can.Print((prefix + "_crossSection_mnvtune_uncertainties.png").c_str());
+
+  plotter.DrawErrorSummary(&dataXSec, "TR", true, true, 1e-5, false, "Detector Model");
+  can.Print((prefix + "_crossSection_detector_uncertainties.png").c_str());
+  
+  //plotter.DrawErrorSummary(&hist, "TR", true, true, 1e-5, false, "Vestigial Muon");
+  //can.Print((prefix + "_" + stepName + "_muon_uncertainties.png").c_str());
 }
 
 //Unfolding function from Aaron Bercelle
@@ -137,7 +176,7 @@ PlotUtils::MnvH1D* UnfoldHist( PlotUtils::MnvH1D* h_folded, PlotUtils::MnvH2D* h
 PlotUtils::MnvH1D* normalize(PlotUtils::MnvH1D* efficiencyCorrected, PlotUtils::MnvH1D* fluxIntegral, const double nNucleons, const double POT)
 {
   efficiencyCorrected->Divide(efficiencyCorrected, fluxIntegral);
-
+  
   efficiencyCorrected->Scale(1./nNucleons/POT);
   efficiencyCorrected->Scale(1.e4); //Flux histogram is in m^-2, but convention is to report cm^2
   efficiencyCorrected->Scale(1., "width");
@@ -153,10 +192,16 @@ int main(const int argc, const char** argv)
 
   TH1::AddDirectory(kFALSE); //Needed so that MnvH1D gets to clean up its own MnvLatErrorBands (which are TH1Ds).
 
-  if(argc != 4)
+  /*if(argc != 4)
   {
     std::cerr << "Expected 3 arguments, but I got " << argc-1 << ".\n"
               << "USAGE: ExtractCrossSection <unfolding iterations> <data.root> <mc.root>\n";
+    return 1;
+  }*/
+  if(argc != 5)
+  {
+    std::cerr << "Expected 4 arguments, but I got " << argc-1 << ".\n"
+              << "USAGE: ExtractCrossSection <unfolding iterations> <data.root> <mc.root> <variable name>\n";
     return 1;
   }
 
@@ -174,14 +219,15 @@ int main(const int argc, const char** argv)
     std::cerr << "Failed to open MC file " << argv[3] << ".\n";
     return 3;
   }
-
+  std::string varName = std::string(argv[4]) + std::string("_");
+  std::cout << varName << std::endl;
   std::vector<std::string> crossSectionPrefixes;
   for(auto key: *dataFile->GetListOfKeys())
   {
     const std::string keyName = key->GetName();
     const size_t endOfPrefix = keyName.find("_data");
-    if (keyName.find("DeltaPt_") == std::string::npos) { continue; } //hardcode to do ONLY delta Pt
-    //if (keyName.find("Lepton_Pt_") == std::string::npos) { continue; }  // or lepton pt
+    // if (keyName.find("Lepton_Pt_") == std::string::npos) { continue; }  // or lepton pt
+    if (keyName.find(varName) == std::string::npos) { continue; }  // or alpha pt
     //don't want to extract cross sections from my sideband samples
     if (keyName.find("MichelSB") != std::string::npos){ continue; }
     if (keyName.find("NPiSB") != std::string::npos){ continue; }
@@ -262,26 +308,28 @@ int main(const int argc, const char** argv)
       auto unfolded = UnfoldHist(bkgSubtracted, migration, nIterations);
       if(!unfolded) throw std::runtime_error(std::string("Failed to unfold ") + folded->GetName() + " using " + migration->GetName());
       Plot(*unfolded, "unfolded", prefix);
+
+
       unfolded->Clone()->Write("unfolded"); //TODO: Seg fault first appears when I uncomment this line
       std::cout << "Survived writing the unfolded histogram.\n" << std::flush; //This is evidence that the problem is on the final file Write() and not unfolded->Clone()->Write().
 
-      std::cout << "CARLOS Test, DIVIDING EFFICIENCY NUM/DENOM:" << std::endl;
       effNum->Divide(effNum, effDenom); //Only the 2 parameter version of MnvH1D::Divide()
                                         //handles systematics correctly.
       Plot(*effNum, "efficiency", prefix);
-
+      
       unfolded->Divide(unfolded, effNum);
       Plot(*unfolded, "efficiencyCorrected", prefix);
 
       auto crossSection = normalize(unfolded, flux, nNucleons->GetVal(), dataPOT);
-      Plot(*crossSection, "crossSection", prefix);
+      //Plot(*crossSection, "crossSection", prefix);
       crossSection->Clone()->Write("crossSection");
-
+      
       //Write a "simulated cross section" to compare to the data I just extracted.
       //If this analysis passed its closure test, this should be the same cross section as
       //what GENIEXSecExtract would produce.
       normalize(simEventRate, flux, nNucleons->GetVal(), mcPOT);
-      
+
+      PlotXSec(*crossSection, *simEventRate, prefix);
       Plot(*simEventRate, "simulatedCrossSection", prefix);
       simEventRate->Write("simulatedCrossSection");
 
