@@ -191,7 +191,7 @@ ScaleFactors ExtractScaleFactors(
 	  //return one;
 	}
 	//Manually set everything to 1 for testing, DON'T LEAVE THIS ON BY ACCIDENT
-	for (int i = 0; i < nUnknowns; ++i) x(i) = 1.0;
+	//for (int i = 0; i < nUnknowns; ++i) x(i) = 1.0;
 	/*
 	std::cout << "SVD solve output: [";
 	for (int i = 0; i < x.GetNrows(); ++i){
@@ -237,6 +237,7 @@ ScaleFactors ExtractScaleFactors(
 
   return sf;
 } 
+
 
 void saveSFPlot(PlotUtils::MnvH1D* mnvhist, const std::string& filename) {
   std::unique_ptr<TCanvas> c(new TCanvas(("c_" + filename).c_str(), "", 800, 600));
@@ -469,14 +470,14 @@ int main(int argc, char** argv) {
   }
 
   ScaleFactors sfs = ExtractScaleFactors(data_hists, mc_hists, mcScale, lambda);
-
   // Save each scale factor histogram
   saveSFPlot(sfs.meanFrontBkg_mnvhist, "meanFront_bkg_scale_factors");
   saveSFPlot(sfs.meanFrontSig_mnvhist, "meanFront_sig_scale_factors");
   saveSFPlot(sfs.michelBkg_mnvhist,  "michel_bkg_scale_factors");
   saveSFPlot(sfs.michelSig_mnvhist,  "michel_sig_scale_factors");
  
-  // --- Helper to build scaled versions for a given sideband index s:
+  // --- lil lambda function to build scaled versions for a given sideband index s:
+  // For s==0 (signal region): leave signal unscaled, apply michel SF to 1, and apply meanFront SF to 3&4
   // For s==1 (MeanFront): apply meanFront bkg SF to categories 3 & 4, and sig SF to cat 0
   // For s==2 (Michel): apply michel bkg SF to category 1, and sig SF to cat 0
   auto applyScaleFactors = [&](size_t s) -> std::vector<PlotUtils::MnvH1D*> {
