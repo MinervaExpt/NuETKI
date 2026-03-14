@@ -83,7 +83,7 @@ class MeanFrontDEDXSideband: public Study
 
       void fillSelectedMC(const CVUniverse& univ, const CCNuEEvent& evt, const double weight) {
       if (univ.GetMeanFrontdEdx() > 2.4){
-	g_OutputTreeManager.Fill("MeanFrontDEDX_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
+	//g_OutputTreeManager.Fill("MeanFrontDEDX_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
 	for (auto& var: fVars) var->selectedMCReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
 	//const bool isSignal = false; //figure out how to check this later, I don't have michelcuts to do it for me :/
 	const auto vertex = univ.GetTrueVertex();

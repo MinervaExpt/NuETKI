@@ -1,5 +1,6 @@
 //Whether or not to save a TTree of my selected events (adds a lot of runtime if true)
 bool write_tree = false; //true;
+int n_sideband_cuts; //have to do this because the number of sideband cuts in Cutter is private and not accessible from here :/
 
 #define USAGE					\
 "\n*** USAGE ***\n"\
@@ -163,21 +164,23 @@ void LoopAndFillEventSelection(
 	//and then I'll use that first cut result to fill my sideband (if 0, goes into sideband, if 1, goes into selected events)
 	std::bitset<64> cut_results = michelcuts.isMCSelected(*universe, myevent, cvWeight);  
 
-	//IMPORTANT NOTE! THIS ISN'T ACTUALLY THE NUMBER OF SIDEBANDS, BUT THE NUMBER OF SIDEBAND CUTS!!!
-	//so for example with dans space of n iso clusters and nmichel, he has 2 cuts but 3 sidebands because one is the combo of the two cuts
-	constexpr int n_sidebands = 2; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
 	std::bitset<64> mask;
 	mask.set(); //set all bits in mask to 1
-	mask &= ~std::bitset<64>((1ULL << n_sidebands) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
+	mask &= ~std::bitset<64>((1ULL << n_sideband_cuts) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
 
-	//if (!cut_results.all()) continue; //skips events that don't pass ALL CUTS
 	if ((cut_results & mask) != mask) continue; //skips events if it doesn't pass all cuts OTHER than sideband cuts
-	std::bitset<n_sidebands> sideband_results(cut_results.to_ullong() & ((1ULL << n_sidebands) - 1)); //also just for testing mostly, this just isolates the results of those n cuts and just drops the massive set of 1s that always precedes it, mostly so I can print it / write it with more readability
+
+	//save the results of the sideband cuts only as a vector, to pass to my output tree manager
+	std::vector<int> sideband_results;
+	for (int i = 0; i < n_sideband_cuts; i++) {
+	  sideband_results.push_back((int)cut_results[i]);
+	}
+
 	if (write_tree){
 	  universe->GetTree()->GetTree()->GetEntry(i); //how is this different than universe->SetEntry(i)? not sure but it definitely is...
 	  myevent.entryNumber = i;
 	}
-	//g_OutputTreeManager.sidebandCutResults = sideband_results;
+	g_OutputTreeManager.sidebandCutResults = sideband_results;
 	
 	const double weight = model.GetWeight(*universe, myevent); //Only calculate the per-universe weight for events that will actually use it.	
 	const bool isSignal = michelcuts.isSignal(*universe, weight);
@@ -206,7 +209,8 @@ void LoopAndFillEventSelection(
 	}
 	//Here we fill sidebands
 	for(auto& study: studies){ study->SelectedMC(*universe, myevent, weight); }
-	
+	g_OutputTreeManager.Fill("MasterAnaDev", myevent.entryNumber);
+
 	if ((cut_results & ~mask) != ~mask) continue; //Check the remaining sideband cuts, everything that passes this has now passed ALL cuts
 
 	//print out events if I want to
@@ -217,11 +221,6 @@ void LoopAndFillEventSelection(
 	  std::cout << "Selected event: " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile")+1 << " , bkgd_ID = " << bkgd_ID << std::endl;
 	}
 	*/
-	//double recoil_e = universe->GetCalRecoilEnergy();
-	//std::cout << "band/universe: " << band.first << "/" << count <<  ", GetCalRecoilEnergy = " << recoil_e << std::endl;
-	count++;
-	
-	g_OutputTreeManager.Fill("MasterAnaDev", myevent.entryNumber);
 
         for(auto& var: vars) var->selectedMCReco->FillUniverse(universe, var->GetRecoValue(*universe), weight); //"Fake data" for closure 
 		
@@ -243,9 +242,7 @@ void LoopAndFillEventSelection(
         }
 	else{ //The actual logic for which category an event gets put into happens above (so that we can save it in the tuple & sidebands)
           for(auto& var: vars) (*var->m_backgroundHists)[bkgd_ID].FillUniverse(universe, var->GetRecoValue(*universe), weight);
-	  //for testing my proton efficiency in true vars 2d plot
           for(auto& var: vars2D) (*var->m_backgroundHists)[bkgd_ID].FillUniverse(universe, var->GetRecoValueX(*universe), var->GetRecoValueY(*universe), weight);
-          //for(auto& var: vars2D) (*var->m_backgroundHists)[bkgd_ID].FillUniverse(universe, var->GetTrueValueX(*universe), var->GetTrueValueY(*universe), weight);
 	}
       } // End band's universe loop
     } // End Band loop
@@ -272,12 +269,10 @@ void LoopAndFillData( PlotUtils::ChainWrapper* data,
       
       //if (!michelcuts.isDataSelected(*universe, myevent).all()) continue;
       std::bitset<64> cut_results = michelcuts.isDataSelected(*universe, myevent);  
-      constexpr int n_sidebands = 2; //just setting this manually, it's mostly for testing anyways, it won't change frequently or anything
       std::bitset<64> mask;
       mask.set(); //set all bits in mask to 1
-      mask &= ~std::bitset<64>((1ULL << n_sidebands) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
+      mask &= ~std::bitset<64>((1ULL << n_sideband_cuts) - 1); //very fancy bit manipulation from chat gpt, just sets the first (or more accurately, least significant) n bits to 0
       if ((cut_results & mask) != mask) continue; //skips events if it doesn't pass all cuts OTHER than sideband cuts
-      std::bitset<n_sidebands> sideband_results(cut_results.to_ullong() & ((1ULL << n_sidebands) - 1)); //also just for testing mostly, this just isolates the results of those n cuts and just drops the massive set of 1s that always precedes it, mostly so I can print it / write it with more readability
 
       //fill sidebands
       for(auto& study: studies) study->SelectedData(*universe, myevent, 1); 
@@ -448,7 +443,7 @@ int main(const int argc, const char** argv)
   ss_1 << "MC_" << std::put_time(&tm, "%b_%d") << ".root";
   //ss_2 << "Data_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
   ss_2 << "Data_" << std::put_time(&tm, "%b_%d") << ".root";
-  ss_3 << "MC_" << std::put_time(&tm, "%b_%d_%H%M") << ".root";
+  ss_3 << "TUPLE_MC_" << std::put_time(&tm, "%b_%d") << ".root";
   std::string mc_out_filename = ss_1.str();
   std::string data_out_filename = ss_2.str();
   std::string mc_tuple_out_filename = ss_3.str();
@@ -463,7 +458,7 @@ int main(const int argc, const char** argv)
   options.m_plist_string = util::GetPlaylist(*options.m_mc, true); //TODO: Put GetPlaylist into PlotUtils::MacroUtil
 
   //Load YAML config options
-  std::string cfgFile = "analysis.yaml";
+  std::string cfgFile = "/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/config/analysis.yaml"; //default config
   if (argc > 3) cfgFile = argv[3];
   YAML::Node config = YAML::LoadFile(cfgFile);
   auto variables_cfg = config["variables"];
@@ -471,7 +466,9 @@ int main(const int argc, const char** argv)
   auto sbcuts_cfg = config["sideband_cuts"];
   auto sidebands_cfg = config["sidebands"];
   auto syst_cfg = config["systematics"];
-  
+  auto tree_cfg = config["write_tree"];
+  if (tree_cfg) { write_tree = tree_cfg.as<bool>(); }
+    
   // You're required to make some decisions
   PlotUtils::MinervaUniverse::SetNuEConstraint(true); //the neutrino-electron flux scattering constraint?? So should leave true?
   PlotUtils::MinervaUniverse::SetPlaylist(options.m_plist_string); //TODO: Infer this from the files somehow?
@@ -484,7 +481,7 @@ int main(const int argc, const char** argv)
   //we're extracting a cross section for.
 
   //cuts defined here
-  PlotUtils::Cutter<CVUniverse, CCNuEEvent>::reco_t sidebands, preCuts;
+  PlotUtils::Cutter<CVUniverse, CCNuEEvent>::reco_t sideband_cuts, preCuts;
   PlotUtils::Cutter<CVUniverse, CCNuEEvent>::truth_t signalDefinition, phaseSpace;
 
   //Loop through cut names in the config file, find corresponding entry in cut registry (defined in cuts/NuETKICuts.h),
@@ -506,7 +503,9 @@ int main(const int argc, const char** argv)
     preCuts.emplace_back(found->creator(cutNode));
   }
   
-  //Sideband cuts, same exact thing as the precuts but add the cut to sidebands instead of preCuts
+  //Sideband cuts, same exact thing as the precuts but add the cut to sideband_cuts instead of preCuts
+  //also save the names so I can have a branch next to the cut results with the corresponding names to help keep track
+  std::vector<std::string> sideband_cut_names; 
   for (auto it = sbcuts_cfg.begin(); it != sbcuts_cfg.end(); ++it) {
     std::string cutName = it->first.as<std::string>();
     YAML::Node cutNode = it->second;
@@ -521,12 +520,11 @@ int main(const int argc, const char** argv)
       std::cout << "Unknown cut in config: " << cutName << std::endl;
       continue;
     }
-    sidebands.emplace_back(found->creator(cutNode));
+    sideband_cuts.emplace_back(found->creator(cutNode));
+    sideband_cut_names.emplace_back(cutName);
   }
-  //sidebands.emplace_back(new reco::MeanFrontdEdX<CVUniverse, CCNuEEvent>(maxMeanFrontDEDX));
-  //sidebands.emplace_back(new reco::MichelCut<CVUniverse, CCNuEEvent>());
-  //sidebands.emplace_back(new reco::NIsoBlobs<CVUniverse, CCNuEEvent>(maxNIsoBlobs));
-
+  n_sideband_cuts = sideband_cut_names.size();
+  
   const double minZ = precuts_cfg["ZRange"]["minZ"].as<double>();
   const double maxZ = precuts_cfg["ZRange"]["maxZ"].as<double>();
   const double apothem = precuts_cfg["Apothem"]["apothem"].as<double>(); //these are values in mm pulled from config file
@@ -542,7 +540,7 @@ int main(const int argc, const char** argv)
   phaseSpace.emplace_back(new truth::ZRange<CVUniverse>("Tracker", minZ, maxZ));
   phaseSpace.emplace_back(new truth::Apothem<CVUniverse>(apothem));
 
-  PlotUtils::Cutter<CVUniverse, CCNuEEvent> mycuts(std::move(preCuts), std::move(sidebands) , std::move(signalDefinition),std::move(phaseSpace));
+  PlotUtils::Cutter<CVUniverse, CCNuEEvent> mycuts(std::move(preCuts), std::move(sideband_cuts) , std::move(signalDefinition),std::move(phaseSpace));
 
   std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, CCNuEEvent>>> MnvTunev1;
 
@@ -639,13 +637,8 @@ int main(const int argc, const char** argv)
   for(auto& var: vars2D) var->InitializeMCHists(error_bands, truth_bands);
   for(auto& var: vars2D) var->InitializeDATAHists(data_band);
 
-  //This is for my saved output trees, just make sure it matches the entries of "studies"
-  //don't need to worry about it if not writing output tree of selected events
-  //std::vector<std::string> sidebandNames = {"MasterAnaDev"};
-  std::vector<std::string> sidebandNames = {"MasterAnaDev", "MeanFrontDEDX_Sideband", "Michel_Sideband"};
-
-  //Initialize my output tree stuff. if write_tree is false I still get an instance of the class, but it doesn't really do much or add any complexity/time  //to do: move write_tree bool to config as well, right now its just hardcoded at the top
-  g_OutputTreeManager.Init(mc_tuple_out_filename, write_tree, *options.m_mc->GetChain()->GetTree(), sidebandNames);
+  //Initialize my output tree stuff. if write_tree is false I still get an instance of the class, but it doesn't really do much or add any complexity/time
+  g_OutputTreeManager.Init(mc_tuple_out_filename, write_tree, *options.m_mc->GetChain()->GetTree(), sideband_cut_names);
 
   // Loop entries and fill
   try

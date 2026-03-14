@@ -10,13 +10,101 @@
 struct OutputTreeManager {
   bool enableOutputTree = false;  
   TFile* outputTreeFile = nullptr;
-
-  //TTree* outputTree = nullptr;
-  std::map<std::string, TTree*> outputTrees; //One for signal region (ie passing all cuts), then one per sideband
+  TTree* outputTree = nullptr;
   
-  //This is so dumb, but basically maps each sideband name to a set of entry numbers (which corresponds to i in my main runEventLoop)
-  //Avoids the triple event filling thing into my trees but jesus this struct is getting out of hand...
+  //This is so dumb, but basically maps each sideband name to a8 set of entry numbers (which corresponds to i in my main runEventLoop)
+  //Avoids the triple event filling thing into my tree but jesus this struct is getting out of hand...
   std::map<std::string, std::unordered_set<Long64_t>> filledEntriesPerTree; 
+
+  const std::vector<std::string> branches_to_keep = {
+    // prong variables
+    "prong_part_E",
+    "prong_ECALCalibE",
+    "prong_axis_vertex",
+    "prong_HCALVisE",
+    "prong_ECALVisE",
+    "prong_ODVisE",
+    "prong_SideECALVisE",
+    "prong_NonMIPClusFrac",
+    "prong_FirstFireFraction",
+    "prong_part_score",
+    "prong_TransverseGapScore",
+    "prong_dEdXMeanFrontTracker",
+    
+    // MasterAnaDev proton variables
+    "MasterAnaDev_proton_E_fromdEdx",
+    "MasterAnaDev_proton_T_fromdEdx",
+    "MasterAnaDev_proton_P_fromdEdx",
+    "MasterAnaDev_proton_Px_fromdEdx",
+    "MasterAnaDev_proton_Py_fromdEdx",
+    "MasterAnaDev_proton_Pz_fromdEdx",
+    "MasterAnaDev_proton_theta",
+    "MasterAnaDev_proton_phi",
+    "MasterAnaDev_proton_calib_energy",
+    "MasterAnaDev_proton_startPointZ",
+    "MasterAnaDev_proton_endPointZ",
+    "MasterAnaDev_proton_nodes_nodesNormE",
+    "MasterAnaDev_proton_nodes_nodesNormE_sz",
+    "MasterAnaDev_sec_protons_T_fromCalo",
+    "MasterAnaDev_hadron_isSideECAL",
+    "MasterAnaDev_hadron_isODMatch",
+    
+    // blob/recoil variables
+    "blob_recoil_E_tracker",
+    "blob_recoil_E_ecal",
+    "blob_recoil_E_hcal",
+    "blob_recoil_E_od",
+    "blob_recoil_E_nucl",
+    "nonvtx_iso_blobs_start_position_z_in_prong",
+    "nonvtx_iso_blobs_start_position_z_in_prong_sz",
+    "nonvtx_iso_blobs_energy_in_prong_sz",
+    "nonvtx_iso_blobs_energy",
+    
+    // MC truth variables
+    "mc_run",
+    "mc_subrun",
+    "mc_nthEvtInFile",
+    "mc_targetZ",
+    "mc_targetA",
+    "mc_targetNucleon",
+    "mc_primFSLepton",
+    "mc_initNucVec",
+    "mc_Q2",
+    "mc_w",
+    "mc_FSPartE",
+    "mc_FSPartPx",
+    "mc_FSPartPy",
+    "mc_FSPartPz",
+    "mc_FSPartPDG",
+    "mc_nFSPart",
+    "mc_intType",
+    "mc_current",
+    "mc_incoming",
+    "mc_incomingE",
+    "mc_targetNucleon",
+    "mc_targetZ",
+    "mc_vtx",
+    "mc_Bjorkenx",
+    "mc_Bjorkeny",
+    "mc_fr_nuParentID",
+    "mc_fr_nuAncestorID",
+    
+    // reco event variables
+    "vtx",
+    "recoil_summed_energy",
+    "improved_nmichel",
+    "n_prongs",
+    "StartPointVertexMultiplicity",
+    "HasNoVertexMismatch",
+    "VertexTrackMultiplicity",
+    "HasNoBackExitingTracks",
+    "phys_n_dead_discr_pair_upstream_prim_track_proj",
+    
+    // other
+    "Psi",
+    "part_response_total_recoil_passive_allNonMuonClusters_id",
+    "part_response_total_recoil_passive_allNonMuonClusters_od",
+  };
 
   //Dummy initialization value, I should never see this value in the output tuple and if I do something got messed up
   int selectionCategory = -60;
@@ -29,56 +117,52 @@ struct OutputTreeManager {
   // 3 = NuMu CC Pi0 (teal) bkgd
   // -1 = other backgrounds (dark blue)
 
-  //This is pretty temporary, and will most likely change frequently. I want to save a tuple of events, including many that don't pass the full selection
-  //But save what WOULD have been the results of the cut. I was originally thinking of doing this as a bitset, but since I know I'll only need 6 (or fewer)
-  //bits, I guess I'll just save it as 6 additional branches, whatever. 
-  static constexpr int numSidebands = 6;
-  // Bitset storing cut results
-  std::bitset<numSidebands> sidebandCutResults;
+  //these are to save the results of sideband cuts as an array of ints, matching the order of entries in 
+  int n_sideband_cuts;
+  TString sideband_names_str;
+  std::vector<int> sidebandCutResults;
   // An array of those same bits, to fill the branches
-  //bool cutBits[numSidebands];
   
-  void Init(const std::string& filename, bool enable, TTree& inputTree, const std::vector<std::string>& sidebandNames) {
+  void Init(const std::string& filename, bool enable, TTree& inputTree, const std::vector<std::string>& sideband_names) {
     enableOutputTree = enable;
     if (!enableOutputTree) return;
-    
+
+    n_sideband_cuts = sideband_names.size();
     outputTreeFile = TFile::Open(filename.c_str(), "RECREATE");
     if (!outputTreeFile || outputTreeFile->IsZombie()) {
       throw std::runtime_error("Failed to open output file: " + filename);
+    }    
+
+    //keep only branches I use, helps reduce run time & file size
+    inputTree.SetBranchStatus("*", 0);
+    for (const auto& b : branches_to_keep) {
+      inputTree.SetBranchStatus(b.c_str(), 1); 
     }
-    
-    for (const auto& name : sidebandNames) {
-      TTree *tree = inputTree.CloneTree(0);
-      tree->SetName(name.c_str());
-      //TTree* tree = new TTree(name.c_str(), name.c_str());
-      //TTree* tree = CloneTreeWithNewName(inputTree, name);
-      tree->Branch("selectionCategory", &selectionCategory, "selectionCategory/I");
-      //This little loop here adds 6 branches to each of the 6 TTrees, showing the status of all 6 of the cuts
-      /*
-      for (int i = 0; i < numSidebands; ++i) { //skip the first entry, which is the signal region/passes precuts tree, and doesn't need a branch
-	std::string branchName = "default";
-	if (i==0) { branchName = "passes_em_score_cut"; }
-	else if (i==1) { branchName = "passes_michel_cut"; }
-	else if (i==2) { branchName = "passes_E_lep_cut"; }
-	else if (i==3) { branchName = "passes_Mod_Eavail_cut"; }
-	else if (i==4) { branchName = "passes_mean_front_DEDX_cut"; }
-	else if (i==5) { branchName = "passes_ESC_proton_cut"; }
-	tree->Branch(branchName.c_str(), &cutBits[i]);
-      }
-      */
-      outputTrees[name] = tree;
+    inputTree.SetBranchStatus("*", 1);
+
+    sideband_names_str = "";
+    for (int i = 0; i < sideband_names.size(); i++) {
+      sideband_names_str += sideband_names[i];
+      if (i < sideband_names.size()-1) sideband_names_str += ", ";
     }
+
+    sidebandCutResults.resize(n_sideband_cuts, 0);
+    outputTree = inputTree.CloneTree(0);
+    outputTree->SetName("MasterAnaDev");
+    outputTree->Branch("selectionCategory", &selectionCategory, "selectionCategory/I");
+    std::string branch_def = "sideband_cut_results[" + std::to_string(n_sideband_cuts) + "]/I";
+    //outputTree->Branch("sideband_cut_results", &cutBits, branch_def.c_str());
+    outputTree->Branch("sideband_cut_results", sidebandCutResults.data(), branch_def.c_str());
+
+    inputTree.SetBranchStatus("*", 1); //unfortunately I think I need this, would run A LOT faster if I could keep those off though...
   }
   
   void Fill(const std::string& sidebandName, Long64_t entryNumber) {
-    if (!enableOutputTree || !outputTrees.count(sidebandName)) return;
+    if (!enableOutputTree) return;
     auto& filledEntries = filledEntriesPerTree[sidebandName];
     if (filledEntries.count(entryNumber)) return; // Already filled — skip
-    /*
-    for (int i = 0; i < numSidebands; ++i) {
-    cutBits[i] = sidebandCutResults[i];
-    }*/
-    outputTrees[sidebandName]->Fill();
+
+    outputTree->Fill();
     filledEntries.insert(entryNumber);
   }
   
@@ -86,14 +170,15 @@ struct OutputTreeManager {
     if (!enableOutputTree) return;
 
     if (outputTreeFile) {
+
+      TNamed* sideband_meta = new TNamed("sideband_cut_names", sideband_names_str.Data());
+      
       outputTreeFile->cd();
-      for (auto& [name, tree] : outputTrees) {
-        tree->Write();
-      }
+      outputTree->Write();
+      sideband_meta->Write();
       outputTreeFile->Close();
       delete outputTreeFile;
       outputTreeFile = nullptr;
-      outputTrees.clear();
       filledEntriesPerTree.clear();
     }
   }

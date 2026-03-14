@@ -126,3 +126,6 @@ sidebands: #sideband histograms to fill
 
 #systematics: false
 systematics: true
+
+#extra option to write an output root file with a TTree of selected events
+write_tree: false 

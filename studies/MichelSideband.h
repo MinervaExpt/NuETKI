@@ -89,7 +89,7 @@ class MichelSideband: public Study
       //if (univ.GetImprovedNMichel() > 0 && univ.GetNIsoBlobs() < 2){
       if (univ.GetImprovedNMichel() > 0){
 
-	g_OutputTreeManager.Fill("Michel_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
+	//g_OutputTreeManager.Fill("Michel_Sideband", evt.entryNumber); //add this event to the michel sb tree of my output tree, selectionCategory is already set earlier
 
 	for (auto& var: fVars) var->selectedMCReco->FillUniverse(&univ, var->GetRecoValue(univ), weight);
 	//const bool isSignal = false; //figure out how to check this later, I don't have michelcuts to do it for me :/
