@@ -7,6 +7,9 @@
 //   FitBackgrounds data.root mc.root 1000 Lepton_Pt
 //   input data histos, input mc histos, regularization strength lambda, variable name
 
+//For testing, forces all output scale factors to 1. DON'T LEAVE THIS ON BY ACCIDENT
+bool set_scale_factors_to_1 = false;
+
 #include "util/GetIngredient.h"
 #include "PlotUtils/MnvH1D.h"
 #include "PlotUtils/MnvVertErrorBand.h"
@@ -191,17 +194,9 @@ ScaleFactors ExtractScaleFactors(
 	  //return one;
 	}
 	//Manually set everything to 1 for testing, DON'T LEAVE THIS ON BY ACCIDENT
-	//for (int i = 0; i < nUnknowns; ++i) x(i) = 1.0;
-	/*
-	std::cout << "SVD solve output: [";
-	for (int i = 0; i < x.GetNrows(); ++i){
-	  if (i == x.GetNrows()-1){
-	    std::cout << x[i] << "]\n" << std::endl;
-	  } else {
-	    std::cout << x[i] << ", ";
-	  }
+	if (set_scale_factors_to_1){
+	  for (int i = 0; i < nUnknowns; ++i) x(i) = 1.0;
 	}
-	*/
 	//Write output to my struct's MnvH1Ds, per universe.
 	if (isCV){
 	  for (int ib = 0; ib < nbins; ++ib) { //double check that this is right, setBinContent(0, ...) does the underflow bin I think...
