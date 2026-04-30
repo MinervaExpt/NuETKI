@@ -30,11 +30,24 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
     void InitializeMCHists(std::map<std::string, std::vector<CVUniverse*>>& mc_error_bands,
                            std::map<std::string, std::vector<CVUniverse*>>& truth_error_bands)
     {
-      std::map<int, std::string> BKGLabels = {{0, "NuECC with pions"}, //so this is gonna include events with a proton that falls out of kinematic signal definition
+      /*std::map<int, std::string> BKGLabels = {{0, "NuECC_nonQELike"}, 
 					      {1, "Other NueCC"}, 
 					      {2, "NC pi0"},
 					      {3, "CC Numu pi0"}};
+      */
+      std::map<int, std::string> BKGLabels = {{0, "NuECC_nonQELike_single_pi_plus"},  //breaking up nonQELike by pion content
+					      {1, "NuECC_nonQELike_single_pi_minus"}, 
+					      {2, "NuECC_nonQELike_single_pi_zero"}, 
+					      {3, "NuECC_nonQELike_Npi"}, 
+					      {4, "Other NueCC"}, //just events with protons outside kinematic requirements I think?
+					      {5, "NC pi0"},
+					      {6, "CC Numu pi0"}};
 
+      std::map<int, std::string> SIGLabels = {{0, "QE"}, 
+					      {1, "RES"}, 
+					      {2, "DIS"},
+					      {3, "2p2h"},
+                                              {4, "Other"}};
       
       
       //Jeremy's Bkgd Categories
@@ -53,6 +66,10 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
 							   GetName().c_str(), BKGLabels,
 							   GetBinVec(), mc_error_bands);
 
+      m_signalBreakdown = new util::Categorized<Hist, int>((GetName() + "_signal").c_str(),
+							   GetName().c_str(), SIGLabels,
+							   GetBinVec(), mc_error_bands);
+
       efficiencyNumerator = new Hist((GetName() + "_efficiency_numerator").c_str(), GetName().c_str(), GetBinVec(), mc_error_bands);
       efficiencyDenominator = new Hist((GetName() + "_efficiency_denominator").c_str(), GetName().c_str(), GetBinVec(), truth_error_bands);
       selectedSignalReco = new Hist((GetName() + "_selected_signal_reco").c_str(), GetName().c_str(), GetBinVec(), mc_error_bands);
@@ -67,6 +84,7 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
 
     //Histograms to be filled
     util::Categorized<Hist, int>* m_backgroundHists;
+    util::Categorized<Hist, int>* m_signalBreakdown;
     Hist* dataHist;
     Hist* efficiencyNumerator;
     Hist* efficiencyDenominator;
@@ -99,8 +117,13 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
       m_backgroundHists->visit([&file](Hist& categ)
                                     {
                                       categ.hist->SetDirectory(&file);
-                                      categ.hist->Write(); //TODO: Or let the TFile destructor do this the "normal" way?                                                                                           
-                                    });
+                                      categ.hist->Write(); //TODO: Or let the TFile destructor do this the "normal" way?
+				    });
+      m_signalBreakdown->visit([&file](Hist& categ)
+                                    {
+                                      categ.hist->SetDirectory(&file);
+                                      categ.hist->Write(); //TODO: Or let the TFile destructor do this the "normal" way?
+				    });
 
       if(efficiencyNumerator)
       {
@@ -140,6 +163,7 @@ class Variable: public PlotUtils::VariableBase<CVUniverse>
     void SyncCVHistos()
     {
       m_backgroundHists->visit([](Hist& categ) { categ.SyncCVHistos(); });
+      m_signalBreakdown->visit([](Hist& categ) { categ.SyncCVHistos(); });
       if(dataHist) dataHist->SyncCVHistos();
       if(efficiencyNumerator) efficiencyNumerator->SyncCVHistos();
       if(efficiencyDenominator) efficiencyDenominator->SyncCVHistos();
