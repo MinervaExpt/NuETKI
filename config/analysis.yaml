@@ -124,8 +124,29 @@ sidebands: #sideband histograms to fill
   NIsoClusSB: false
   NPiSB: false
 
+#CVModel: MnvTunev2
+
+CVModel: #this is MnvTunev2 + elastic FSI bug fix
+  FluxAndCVReweighter:
+    enabled: true
+  GENIEReweighter:
+    enabled: true
+    useNonResPi: true
+    useDeutreriumPionTune: false
+  LowRecoil2p2hReweighter:
+    enabled: true
+  RPAReweighter:
+    enabled: true
+  LowQ2PiReweighter:
+    enabled: true
+    channel: JOINT
+  FSIReweighter:
+    enabled: true
+    useElastic: true
+    useAbsorption: false
+
 #systematics: false
 systematics: true
 
 #extra option to write an output root file with a TTree of selected events
-write_tree: false 
+write_tree: false
