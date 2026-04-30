@@ -42,14 +42,15 @@ namespace truth
     class IsNue: public PlotUtils::SignalConstraint<UNIVERSE>
     {
     public:
-    IsNue(): PlotUtils::SignalConstraint<UNIVERSE>("IsNuE or AntiNuE")
+    IsNue(): PlotUtils::SignalConstraint<UNIVERSE>("IsNuE")
 	{
 	}
 
     private:
       bool checkConstraint(const UNIVERSE& univ) const override
       {
-	return abs(univ.GetTruthNuPDG()) == 12;
+	//return abs(univ.GetTruthNuPDG()) == 12;
+	return univ.GetTruthNuPDG() == 12;
       }
     };
 
