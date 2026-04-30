@@ -12,7 +12,8 @@ void doClosureTest(
   TFile* xsec_file = TFile::Open(xsec_file_name);
   TFile* genie_file = TFile::Open(genieXSec_file_name);
 
-  std::string mc_xsec_name = "simulatedCrossSection"; //ExtractCrossSection saves the variable name in the file name, not on the hist itself
+  //std::string mc_xsec_name = "simulatedCrossSection_from_eff_denom"; //ExtractCrossSection saves the variable name in the file name, not on the hist itself
+  std::string mc_xsec_name = "simulatedCrossSection_from_selection"; //ExtractCrossSection saves the variable name in the file name, not on the hist itself
   std::string genie_xsec_name = std::string(var) + "_xsec";
   std::string hist_name = std::string(var) + " Closure Test";
   std::string out_name = std::string(var) + "_closure.png";
@@ -28,8 +29,11 @@ void doClosureTest(
   }
   mc_xsec->Divide(mc_xsec, genie_xsec);
   mc_xsec->SetName(hist_name.c_str());
-  
+
+  std::cout << "closure test ratio, evLoop/GENIEXSec = " << mc_xsec->GetBinContent(4) << std::endl;
   TCanvas *c1 = new TCanvas("c1", "Closure Test", 800, 600);
+  mc_xsec->GetYaxis()->SetRangeUser(0.995, 1.00);
+  mc_xsec->SetStats(0);
   mc_xsec->Draw("hist");
   c1->SaveAs(out_name.c_str());
   
