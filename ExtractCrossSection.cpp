@@ -226,8 +226,7 @@ int main(const int argc, const char** argv)
   {
     const std::string keyName = key->GetName();
     const size_t endOfPrefix = keyName.find("_data");
-    // if (keyName.find("Lepton_Pt_") == std::string::npos) { continue; }  // or lepton pt
-    if (keyName.find(varName) == std::string::npos) { continue; }  // or alpha pt
+    //if (keyName.find(varName) == std::string::npos) { continue; }  // only extract an xsec for the variable that was passed
     //don't want to extract cross sections from my sideband samples
     if (keyName.find("MichelSB") != std::string::npos){ continue; }
     if (keyName.find("NPiSB") != std::string::npos){ continue; }
@@ -327,12 +326,41 @@ int main(const int argc, const char** argv)
       //Write a "simulated cross section" to compare to the data I just extracted.
       //If this analysis passed its closure test, this should be the same cross section as
       //what GENIEXSecExtract would produce.
+      double totalNorm = flux->GetBinContent(1)*nNucleons->GetVal()*mcPOT/10000;
       normalize(simEventRate, flux, nNucleons->GetVal(), mcPOT);
-
+      
       PlotXSec(*crossSection, *simEventRate, prefix);
       Plot(*simEventRate, "simulatedCrossSection", prefix);
-      simEventRate->Write("simulatedCrossSection");
+      simEventRate->Write("simulatedCrossSection_from_eff_denom");
 
+
+
+      //alright here is where I'm going to actually extract my fake data. Should match the sim event rate from eff denom?
+      //first get the selected mc events
+      auto folded_mc = util::GetIngredient<PlotUtils::MnvH1D>(*mcFile, "data", prefix);
+
+      //already have the backgrounds collected, just don't scale it by the POT ratio this time
+      auto bkgSubtracted_mc = std::accumulate(backgrounds.begin(), backgrounds.end(), folded_mc->Clone(), [mcPOT, dataPOT](auto sum, const auto hist)
+                                           {
+                                             std::cout << "Subtracting " << hist->GetName() << " scaled by " << -1.0 << " from " << sum->GetName() << "\n";
+                                             sum->Add(hist, -1.0);
+                                             std::cout << sum->GetName() << " integral, after bkgd subtracting = " << sum->Integral() << "\n";
+                                             return sum;
+                                           });
+      bkgSubtracted_mc->Write("backgroundSubtracted_mc");
+
+      //unfolding should work exactly the same...
+      auto unfolded_mc = UnfoldHist(bkgSubtracted_mc, migration, nIterations);
+      if(!unfolded_mc) throw std::runtime_error(std::string("Failed to unfold ") + folded_mc->GetName() + " using " + migration->GetName());
+      unfolded_mc->Clone()->Write("unfolded_mc");
+
+      //efficiency correction is also the same, and effNum is already divided when doing the data xsec, so its already num/denom
+      unfolded_mc->Divide(unfolded_mc, effNum);
+
+      //then we normalize!
+      auto crossSection_mc = normalize(unfolded_mc, flux, nNucleons->GetVal(), mcPOT);
+      crossSection_mc->Write("simulatedCrossSection_from_selection");
+      
     }
     catch(const std::runtime_error& e)
     {
