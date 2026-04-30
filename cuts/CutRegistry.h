@@ -155,14 +155,14 @@ CutBase* MakeEleptonSin2Theta(const YAML::Node&) {
 inline const std::vector<CutDef> ALL_CUTS = {
   //precuts
   { "HasTracks", &MakeHasTracks },
+  { "HasNoBackExitingTracks", &MakeHasNoBackExitingTracks },
+  { "SideExitingMuon", &MakeSideExitingMuon },
   { "NoVertexMismatch", &MakeNoVertexMismatch },
   { "ZRange", &MakeZRange },
   { "Apothem", &MakeApothem },
   { "StartPointVertexMultiplicity", &MakeStartPointVertexMultiplicity },
   { "Afterpulsing", &MakeAfterpulsing },
   { "NoDeadtime", &MakeNoDeadtime },
-  { "HasNoBackExitingTracks", &MakeHasNoBackExitingTracks },
-  { "SideExitingMuon", &MakeSideExitingMuon },
   { "DSCalVisE", &MakeDSCalVisE },
   { "ODCalVisE", &MakeODCalVisE },
   { "VertexTrackMultiplicity", &MakeVertexTrackMultiplicity },
