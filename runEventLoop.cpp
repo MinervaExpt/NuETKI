@@ -56,6 +56,7 @@ enum ErrorCodes
 #include "util/Variable.h"
 #include "util/Variable2D.h"
 #include "util/VariableRegistry.h"
+#include "util/ReweighterRegistry.h"
 #include "util/GetFluxIntegral.h"
 #include "util/GetPlaylist.h"
 #include "util/Binning.h"
@@ -90,6 +91,7 @@ enum ErrorCodes
 #include "PlotUtils/MINOSEfficiencyReweighter.h"
 #include "PlotUtils/LowQ2PiReweighter.h"
 #include "PlotUtils/AMUDISReweighter.h"
+#include "PlotUtils/FSIReweighter.h"
 #include "PlotUtils/TargetUtils.h"
 #pragma GCC diagnostic pop
 
@@ -104,12 +106,24 @@ enum ErrorCodes
 #include <ctime>
 #include <sstream>
 #include <iomanip>
+#include <chrono>
 
 //yaml
 #include <yaml-cpp/yaml.h>
 
 
 OutputTreeManager g_OutputTreeManager; //defining my output tree manager (struct declaration and full def in CCNuEEvent.h)
+
+//added these for grid time tracking
+auto getTimeStamp() {
+    return std::chrono::high_resolution_clock::now();
+}
+auto printElapsed(const std::string& label, 
+                  std::chrono::high_resolution_clock::time_point start,
+                  std::chrono::high_resolution_clock::time_point end) {
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << label << ": " << elapsed << " ms\n";
+}
 
 //==============================================================================
 // Loop and Fill
@@ -129,10 +143,10 @@ void LoopAndFillEventSelection(
   std::cout << "Starting MC reco loop...\n";
   
   const int nEntries = chain->GetEntries();
-  
+  //chain->GetChain()->SetBranchStatus("*", 0);
   for (Long64_t i=0; i<nEntries; ++i)
   {
-    if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
+    //if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
 
     CCNuEEvent cvEvent;
     cvUniv->SetEntry(i);
@@ -151,6 +165,7 @@ void LoopAndFillEventSelection(
         CCNuEEvent myevent; // make sure your event is inside the error band loop. 
         // Tell the Event which entry in the TChain it's looking at
         universe->SetEntry(i);
+	myevent.primaryProtonIndex = universe->GetHighestEnergySignalProtonIndex();
         // This is where you would Access/create a Michel
         //weight is ignored in isMCSelected() for all but the CV Universe.
 	//if ths event doesnt pass selection cuts, skip
@@ -181,22 +196,36 @@ void LoopAndFillEventSelection(
 	  myevent.entryNumber = i;
 	}
 	g_OutputTreeManager.sidebandCutResults = sideband_results;
+	g_OutputTreeManager.cv_weight = cvWeight;
 	
 	const double weight = model.GetWeight(*universe, myevent); //Only calculate the per-universe weight for events that will actually use it.	
 	const bool isSignal = michelcuts.isSignal(*universe, weight);
 
 	int bkgd_ID;
-	if (isSignal){ g_OutputTreeManager.selectionCategory = -999;	}
+	int sig_ID;
+	if (isSignal){
+	  g_OutputTreeManager.selectionCategory = -999;
+	  sig_ID = 4; //sig_ID == 4 -> NuE CCQELike other, mostly (all?) coherent events in my signal sample
+	  if (universe->GetInteractionType()==1){ sig_ID = 0; } //NuE CCQELike QE
+	  else if (universe->GetInteractionType()==2){ sig_ID = 1; } //NuE CCQELike RES
+	  else if (universe->GetInteractionType()==3){ sig_ID = 2; } //NuE CCQELike DIS
+	  else if (universe->GetInteractionType()==8){ sig_ID = 3; } //NuE CCQELike 2p2h
+	}
 	else {
 	  bkgd_ID = -1; //this is "other" selectionCategory
 	  //NueCC with final state mesons (mostly pions)
-	  if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasFSMeson()) { bkgd_ID = 0; }
-	  //Other NueCC. So this will be NON QELike nuecc, will include all the stuff with mesons
-	  else if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1) { bkgd_ID = 1; }
+	  //if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasFSMeson()) { bkgd_ID = 0; }
+	  if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasSinglePiPlus()) { bkgd_ID = 0; }
+	  else if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasSinglePiMinus()) { bkgd_ID = 1; }
+	  else if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasSinglePiZero()) { bkgd_ID = 2; }
+	  else if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1 && universe->GetHasMultiplePions()) { bkgd_ID = 3; }
+
+	  //Other NueCC. mostly just consists of completely signal-like events but protons are outside of kinematic reqs
+	  else if (abs(universe->GetTruthNuPDG())==12 && universe->GetCurrent()==1) { bkgd_ID = 4; }
 	  //Other NC pi0, all "other" NC i get should have pi0 so if this is small and the "other" selectionCategory is large that's a problem
-	  else if (universe->GetCurrent()==2 && universe->GetHasFSPi0()==1) { bkgd_ID = 2; }
+	  else if (universe->GetCurrent()==2 && universe->GetHasFSPi0()==1) { bkgd_ID = 5; }
 	  //same logic here with cc numu pi0
-	  else if (abs(universe->GetTruthNuPDG())==14 && universe->GetCurrent()==1 && universe->GetHasFSPi0()==1) { bkgd_ID = 3; }
+	  else if (abs(universe->GetTruthNuPDG())==14 && universe->GetCurrent()==1 && universe->GetHasFSPi0()==1) { bkgd_ID = 6; }
 	  
 	  //If I need to use Hang's bkgd categories (cc numu, NC Coh, other NC, nu + e) use these (and also use the corresponding Variable.h)	  
 	  //int bkgd_ID = -1;
@@ -214,14 +243,10 @@ void LoopAndFillEventSelection(
 	if ((cut_results & ~mask) != ~mask) continue; //Check the remaining sideband cuts, everything that passes this has now passed ALL cuts
 
 	//print out events if I want to
-	/*
-	if (isSignal){
-	  std::cout << "Selected event: " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile")+1 << " , SIGNAL EVENT" << std::endl;
-	} else {
-	  std::cout << "Selected event: " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile")+1 << " , bkgd_ID = " << bkgd_ID << std::endl;
+	if (band.first == "cv" && isSignal) {
+	  std::cout << "signal event: " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile")+1 << ", total cvWeight = " << cvWeight << std::endl;
 	}
-	*/
-
+	
         for(auto& var: vars) var->selectedMCReco->FillUniverse(universe, var->GetRecoValue(*universe), weight); //"Fake data" for closure 
 		
         if(isSignal)
@@ -233,6 +258,8 @@ void LoopAndFillEventSelection(
             var->efficiencyNumerator->FillUniverse(universe, var->GetTrueValue(*universe), weight);
             var->migration->FillUniverse(universe, var->GetRecoValue(*universe), var->GetTrueValue(*universe), weight);
             var->selectedSignalReco->FillUniverse(universe, var->GetRecoValue(*universe), weight); //Efficiency numerator in reco variables.  Useful for warping studies.
+	    //My additional signal breakdown, not used for any cross section calculation but useful for plotting
+	    (*var->m_signalBreakdown)[sig_ID].FillUniverse(universe, var->GetRecoValue(*universe), weight);
           }
 
           for(auto& var: vars2D)
@@ -264,7 +291,7 @@ void LoopAndFillData( PlotUtils::ChainWrapper* data,
   for (int i=0; i<data->GetEntries(); ++i) {
     for (auto universe : data_band) {
       universe->SetEntry(i);
-      if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
+      //if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
       CCNuEEvent myevent;
       
       //if (!michelcuts.isDataSelected(*universe, myevent).all()) continue;
@@ -307,7 +334,7 @@ void LoopAndFillEffDenom( PlotUtils::ChainWrapper* truth,
   const int nEntries = truth->GetEntries();
   for (int i=0; i<nEntries; ++i)
   {
-    if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
+    //if(i%1000==0) std::cout << i << " / " << nEntries << "\r" << std::flush;
 
     CCNuEEvent cvEvent;
     cvUniv->SetEntry(i);
@@ -333,7 +360,8 @@ void LoopAndFillEffDenom( PlotUtils::ChainWrapper* truth,
         //Fill efficiency denominator now: 
         for(auto var: vars)
         {
-          var->efficiencyDenominator->FillUniverse(universe, var->GetTrueValue(*universe), weight);
+	  //if (band.first == "cv") { std::cout << "Event i=" << i << ": " << universe->GetInt("mc_run") << " | " << universe->GetInt("mc_subrun") << " | " << universe->GetInt("mc_nthEvtInFile") << ", val = " << var->GetTrueValue(*universe) << ", cvweight = " << cvWeight << std::endl; }
+	  var->efficiencyDenominator->FillUniverse(universe, var->GetTrueValue(*universe), weight);
         }
 
         for(auto var: vars2D)
@@ -410,6 +438,9 @@ int main(const int argc, const char** argv)
 {
   TH1::AddDirectory(false);
 
+  std::chrono::high_resolution_clock::time_point t_start, t_mc_start, t_eff_start, t_data_start, t_data_end, t_end;
+  t_start = getTimeStamp();
+  
   //Validate input.
   //I expect a data playlist file name and an MC playlist file name, and an optional 3rd config file (otherwise use default)
   const int nArgsExpected = 2;
@@ -459,22 +490,23 @@ int main(const int argc, const char** argv)
 
   //Load YAML config options
   std::string cfgFile = "/exp/minerva/app/users/cpernas/MAT_AL9/NuE_TKI/config/analysis.yaml"; //default config
-  if (argc > 3) cfgFile = argv[3];
+  if (argc > 3) cfgFile = argv[3]; //override default config if one is provided
   YAML::Node config = YAML::LoadFile(cfgFile);
-  auto variables_cfg = config["variables"];
-  auto precuts_cfg = config["precuts"];
-  auto sbcuts_cfg = config["sideband_cuts"];
-  auto sidebands_cfg = config["sidebands"];
-  auto syst_cfg = config["systematics"];
-  auto tree_cfg = config["write_tree"];
+  auto variables_cfg = config["variables"];  //list of individual variables to write xsec ingredients for
+  auto precuts_cfg = config["precuts"];      //list of precuts to apply, checked first
+  auto sbcuts_cfg = config["sideband_cuts"]; //list of sideband cuts to apply, checked after filling sidebands
+  auto sidebands_cfg = config["sidebands"];  //list of sideband regions to write
+  auto model_cfg = config["CVModel"];        //list of reweighters to apply to the CV
+  auto syst_cfg = config["systematics"];     //true or false (for now), either add all of them or none
+  auto tree_cfg = config["write_tree"];      //true or false, whether or not to write and save output TTree of selected events (and sb events). Adds a lot of runtime.
   if (tree_cfg) { write_tree = tree_cfg.as<bool>(); }
     
   // You're required to make some decisions
   PlotUtils::MinervaUniverse::SetNuEConstraint(true); //the neutrino-electron flux scattering constraint?? So should leave true?
-  PlotUtils::MinervaUniverse::SetPlaylist(options.m_plist_string); //TODO: Infer this from the files somehow?
+  PlotUtils::MinervaUniverse::SetPlaylist(options.m_plist_string); 
   PlotUtils::MinervaUniverse::SetAnalysisNuPDG(12); //Apparently this is: Analysis neutrino identity -- used for flux weights
   PlotUtils::MinervaUniverse::SetNFluxUniverses(100);
-  PlotUtils::MinervaUniverse::SetZExpansionFaReweight(false);
+  PlotUtils::MinervaUniverse::SetZExpansionFaReweight(false); //to do: investigate
   PlotUtils::MinervaUniverse::RPAMaterials(false); //Sets whether you want to use different nuclei for RPA reweight, with false it just uses carbon which is fine for me
 
   //Now that we've defined what a cross section is, decide which sample and model
@@ -542,18 +574,39 @@ int main(const int argc, const char** argv)
 
   PlotUtils::Cutter<CVUniverse, CCNuEEvent> mycuts(std::move(preCuts), std::move(sideband_cuts) , std::move(signalDefinition),std::move(phaseSpace));
 
-  std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, CCNuEEvent>>> MnvTunev1;
-
-  MnvTunev1.emplace_back(new PlotUtils::FluxAndCVReweighter<CVUniverse, CCNuEEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::GENIEReweighter<CVUniverse, CCNuEEvent>(true, false));
-  MnvTunev1.emplace_back(new PlotUtils::LowRecoil2p2hReweighter<CVUniverse, CCNuEEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::MINOSEfficiencyReweighter<CVUniverse, CCNuEEvent>());
-  MnvTunev1.emplace_back(new PlotUtils::RPAReweighter<CVUniverse, CCNuEEvent>());
-
-  //adding this to my CV, should swap these decisions to configs though
-  MnvTunev1.emplace_back(new PlotUtils::LowQ2PiReweighter<CVUniverse, CCNuEEvent>("JOINT")); 
-  
-  PlotUtils::Model<CVUniverse, CCNuEEvent> model(std::move(MnvTunev1));
+  //Define CV model using config inputs
+  std::vector<std::unique_ptr<PlotUtils::Reweighter<CVUniverse, CCNuEEvent>>> MyModel;  
+  //Check if I ask for a specific MnvTune defined in util/ReweighterRegistry.h, if so add those reweighters (defined in util/ReweighterRegistry.h)
+  if (model_cfg.IsScalar()) {
+    std::string tuneName = model_cfg.as<std::string>();
+    const std::vector<ReweighterDef>* tuneReweights = nullptr;
+    if      (tuneName == "MnvTunev1") tuneReweights = &MnvTunev1_reweights;
+    else if (tuneName == "MnvTunev2") tuneReweights = &MnvTunev2_reweights;
+    else {
+      std::cout << "Unknown tune in config: " << tuneName << std::endl;
+      // handle error — throw, return, etc.
+    }
+    if (tuneReweights) {
+      for (const auto& def : *tuneReweights) {
+	MyModel.emplace_back(def.creator(def.defaultNode));
+      }
+    }
+  } else if (model_cfg.IsMap()) { //if not search through all known reweighters and add the ones in config individually
+    for (auto it = model_cfg.begin(); it != model_cfg.end(); ++it) {
+      std::string reweighterName = it->first.as<std::string>();
+      YAML::Node reweighterNode = it->second;      
+      if (!reweighterNode["enabled"] || !reweighterNode["enabled"].as<bool>())
+	continue;      
+      // find matching registry entry
+      auto found = std::find_if( ALL_REWEIGHTS.begin(), ALL_REWEIGHTS.end(), [&](const ReweighterDef& def){ return def.name == reweighterName; });      
+      if (found == ALL_REWEIGHTS.end()) {
+	std::cout << "Unknown reweighter in config: " << reweighterName << std::endl;
+	continue;
+      }
+      MyModel.emplace_back(found->creator(reweighterNode));
+    }
+  }
+  PlotUtils::Model<CVUniverse, CCNuEEvent> model(std::move(MyModel));
 
   // Make a map of systematic universes
   // Leave out systematics when making validation histograms
@@ -630,13 +683,13 @@ int main(const int argc, const char** argv)
     data_studies.push_back(new NPiSideband(vars, error_bands, truth_bands, data_band));
     studies.push_back(new NPiSideband(vars, error_bands, truth_bands, data_band));
   }
-
+  
   for(auto& var: vars) var->InitializeMCHists(error_bands, truth_bands);
   for(auto& var: vars) var->InitializeDATAHists(data_band);
   
   for(auto& var: vars2D) var->InitializeMCHists(error_bands, truth_bands);
   for(auto& var: vars2D) var->InitializeDATAHists(data_band);
-
+ 
   //Initialize my output tree stuff. if write_tree is false I still get an instance of the class, but it doesn't really do much or add any complexity/time
   g_OutputTreeManager.Init(mc_tuple_out_filename, write_tree, *options.m_mc->GetChain()->GetTree(), sideband_cut_names);
 
@@ -645,16 +698,26 @@ int main(const int argc, const char** argv)
   {
     
     CVUniverse::SetTruth(false);
+    t_mc_start = getTimeStamp();
     LoopAndFillEventSelection(options.m_mc, error_bands, vars, vars2D, studies, mycuts, model);
     CVUniverse::SetTruth(true);
+    t_eff_start = getTimeStamp();
     LoopAndFillEffDenom(options.m_truth, truth_bands, vars, vars2D, mycuts, model);
+
+    std::cout << "---------------- YAML config ----------------" << std::endl;
+    std::cout << config << std::endl;
+    //std::cout << model_cfg << std::endl;
+    std::cout << "---------------------------------------------" << std::endl;
     options.PrintMacroConfiguration(argv[0]);
     std::cout << "MC cut summary:\n" << mycuts << "\n";
     mycuts.resetStats();
 
     CVUniverse::SetTruth(false);
+    t_data_start = getTimeStamp();    
     LoopAndFillData(options.m_data, data_band, vars, vars2D, data_studies, mycuts);
     std::cout << "Data cut summary:\n" << mycuts << "\n";
+    t_data_end = getTimeStamp();
+
     
     //Write MC results
     TFile* mcOutDir = TFile::Open(mc_out_filename.c_str(), "RECREATE");
@@ -681,7 +744,9 @@ int main(const int argc, const char** argv)
     for(const auto& var: vars)
     {
       //Flux integral only if systematics are being done (temporary solution)
-      util::GetFluxIntegral(*error_bands["cv"].front(), var->efficiencyNumerator->hist)->Write((var->GetName() + "_reweightedflux_integrated").c_str());
+      
+      auto flux_hist = util::GetFluxIntegral(*error_bands["cv"].front(), var->efficiencyNumerator->hist);
+      flux_hist->Write((var->GetName() + "_reweightedflux_integrated").c_str());
       //Always use MC number of nucleons for cross section
       auto nNucleons = new TParameter<double>((var->GetName() + "_fiducial_nucleons").c_str(), targetInfo.GetTrackerNNucleons(minZ, maxZ, true, apothem));
       nNucleons->Write();
@@ -716,6 +781,14 @@ int main(const int argc, const char** argv)
               << e.what() << "\n" << USAGE << "\n";
     return badFileRead;
   }
-
+  t_end = getTimeStamp();
+  
+  std::cout << "--------- grid job time benchmarking ---------\n";
+  printElapsed("   time to set up & open input", t_start, t_mc_start);
+  printElapsed("              time for MC loop", t_mc_start, t_eff_start);
+  printElapsed("       time for eff denom loop", t_eff_start, t_data_start);
+  printElapsed("            time for data loop", t_data_start, t_data_end);
+  printElapsed("time to write and close output", t_data_end, t_end);
+  
   return success;
 }
