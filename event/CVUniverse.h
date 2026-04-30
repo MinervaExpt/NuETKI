@@ -35,7 +35,9 @@
 #include <TLorentzVector.h>
 
 class CVUniverse : public PlotUtils::MinervaUniverse {
-
+  private:
+    mutable int m_cachedProtonIndex = -9999;
+    mutable bool m_protonIndexCached = false; 
   public:
   #include "PlotUtils/MuonFunctions.h" // GetMinosEfficiencyWeight
   #include "PlotUtils/TruthFunctions.h" //Getq3True
@@ -57,8 +59,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   // ========================================================================
   static constexpr double M_n = 939.56536;  //MeV
   static constexpr double M_p = 938.272013; //MeV
-  static constexpr double M_e = 0.51099895; //MeV
   static constexpr double M_pi = 139.57039; //MeV
+  //static constexpr double M_p = 938.27; //MeV
+  //static constexpr double M_pi = 139.57; //MeV
+  static constexpr double M_e = 0.51099895; //MeV
   static constexpr double M_nucleon = (1.5*M_n+M_p)/2.5;
 
   static constexpr int PDG_n = 2112;
@@ -66,10 +70,16 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 
   static constexpr double pi = 3.141592653589793;
 
-  static constexpr double beam_tilt = 3.343 * (pi / 180); //beam tilt downward with respect to z axis, in radians. 3.3 degrees, or 58 mrads.
+  static constexpr double beam_tilt = 0.05887; //beam tilt downward with respect to z axis, in radians. 3.3 degrees, or 58 mrads.
   //According to the NuMI NIM paper, the exact angle is 3.34349, but at that precision you need to specify where along the target hall/minos hall you are
   //since the curvature of the earth becomes relevant at the ~1km scale lol
 
+  //necessary for caching my true proton index on an event by event basis so I don't have to find it again for every variable
+  //basically just says everytime we set a new entry, reset the "we've found the primary proton" flag
+  void SetEntry(Long64_t entry) {
+    PlotUtils::BaseUniverse::SetEntry(entry);  // call base class first
+    m_protonIndexCached = false;  // invalidate cache
+  }  
   // ========================================================================
   // Write a "Get" function for all quantities access by your analysis.
   // For composite quantities (e.g. Enu) use a calculator function.
@@ -93,7 +103,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetVecElem("prong_part_E", 0, 3);
   }
 
-  //the python nu_e people scale electron energy down 5.8% in the CV, this gets overridden in the ElectronEnergyShift universes though
+  //the python nu_e people scale electron energy in the ECAL down 5.8% in the CV, this gets overridden in the ElectronEnergyShift universes though
   //Also in MeV
   virtual double GetEMEnergyShift() const {
     static const double EM_ENERGY_SCALE_SHIFT_ECAL = -0.058;
@@ -154,12 +164,12 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     // create momentum vector scaled by (1 + scale)
     ROOT::Math::XYZVector p( electronp[0][0], electronp[0][1], electronp[0][2] );
     p *= (1.0 + scale);
-
+    
     // rotate by beam angle about X
     ROOT::Math::RotationX r(-beam_tilt);
-    ROOT::Math::XYZVector s = r(p);
+    ROOT::Math::XYZVector ret = r(p);
 
-    return s;
+    return ret;
   } 
 
   //Transverse momentum of the lepton (electron for me), in MeV
@@ -180,23 +190,12 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   }
   //MasterAnaDev_proton_theta, in rad
   virtual double GetProtonTheta() const {
-    double protonTheta = GetDouble("MasterAnaDev_proton_theta");
-    return protonTheta;
-
-    //TO DO: THESE TWO SETS OF QUANTITIES ARE NOT EXACTLY THE SAME. they almost are, but not quite?
-    //Find out why, which one to use, and does it matter? Gonna use MAD one for now
-
-    //double protonTheta1 = GetDouble("MasterAnaDev_proton_theta");
-    //double protonPhi1 = GetDouble("MasterAnaDev_proton_phi");
-
-    //double protonTheta2 = (r(protonP_vec)).Theta();
-    //double protonPhi2 = (r(protonP_vec)).Phi(); 
-
+    return GetDouble("MasterAnaDev_proton_theta");
   }
 
   //same thing but in degrees, useful for plotting. Also if there's no proton candidate don't convert it
   virtual double GetProtonThetaDeg() const {
-    double protonTheta = GetDouble("MasterAnaDev_proton_theta");
+    double protonTheta = GetProtonTheta();
     //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
     if (protonTheta > -9999){
       return protonTheta * (180/pi);
@@ -300,30 +299,20 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   
   //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum (in MeV)
   ROOT::Math::XYZVector GetElectronPt3D() const{
-    ROOT::Math::XYZVector electronP_vec = GetElectronP3D();
+    ROOT::Math::XYZVector electronP_vec = GetElectronP3D(); //GetElectronP3D ALREADY returns rotated to beam frame
 
-    ROOT::Math::RotationX r(-beam_tilt); //This object represents a slight rotation about the x axis so that the theta we get is wrt to the beam direction and not the z axis, which points down to the ground 3.3 degrees. we can then apply r to the two vectors above
-    ROOT::Math::RotationX r2(beam_tilt); //the reverse rotation to get back to lab coords (beam_tilt is positive now)
+    //Now set z to zero in the beam frame to keep only the transverse components
+    electronP_vec.SetZ(0); 
 
-    //perform the rotation, basically transforming to new beam based coord system
-    ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-
-    //Now set z to zero in the beam frame to get only the transverse components, then rotate back
-    electronPt_vec.SetZ(0); 
-    electronPt_vec = r2(electronPt_vec);
-
-    return electronPt_vec;
+    return electronP_vec;
   }
   
-  //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum (in MeV)
+  //Returns a root XYZVector object containing the lepton (electron) transverse 3 momentum (in MeV), in BEAM FRAME
   ROOT::Math::XYZVector GetProtonPt3D() const{
     ROOT::Math::XYZVector protonP_vec(GetDouble("MasterAnaDev_proton_Px_fromdEdx"), GetDouble("MasterAnaDev_proton_Py_fromdEdx"), GetDouble("MasterAnaDev_proton_Pz_fromdEdx"));
     ROOT::Math::RotationX r(-beam_tilt);
-    ROOT::Math::RotationX r2(beam_tilt);
-
     ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
     protonPt_vec.SetZ(0);
-    protonPt_vec = r2(protonPt_vec);
 
     return protonPt_vec;
   }
@@ -332,18 +321,16 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //which is then used to calculate TKI variables
   //Remember: z direction != beam direction so transverse doesn't exactly mean z components are zero, although they should be small
   ROOT::Math::XYZVector GetDeltaPt3D() const{
-    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D();
-    ROOT::Math::XYZVector protonPt_vec = GetProtonPt3D();
-        
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D(); //returns in beam frame
+    ROOT::Math::XYZVector protonPt_vec = GetProtonPt3D(); //returns in beam frame
     //ROOT::Math::XYZVector deltaP_vec = electronP_vec + protonP_vec; //sum of the full 3 momenta. Not sure if I need this so commenting it out for now
     ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
-    
     //std::cout << "delta P total (kinda useless?): " << deltaP_vec.R() << std::endl;
     //std::cout << "delta Ptx: " << deltaPt_vec.X() << std::endl;
     //std::cout << "delta Pty: " << deltaPt_vec.Y() << std::endl;
     //std::cout << "delta Pt: " << deltaPt_vec.R() << std::endl;
     //std::cout << "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n" << std::endl;
-    return deltaPt_vec;
+    return deltaPt_vec; //returns in beam frame
   }
   
   //delta pT (magnitude of the vector), in MeV
@@ -355,31 +342,19 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 
   //Magnitude of the component of delta pT orthogonal to electron pT (MeV)
   double GetDeltaPtX() const{
-    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D();
-    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPt3D();
-
-    ROOT::Math::RotationX r(-beam_tilt);
-
-    //Rotate both back to beam frame
-    ROOT::Math::XYZVector electron_pt_in_beam_frame = r(electronPt_vec);
-    ROOT::Math::XYZVector delta_pt_in_beam_frame = r(deltaPt_vec);
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D(); //returns in beam frame
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPt3D(); //returns in beam frame
 
     //expression for the scalar rejection, aka perpendicular dot product
-    double num = delta_pt_in_beam_frame.Y()*electron_pt_in_beam_frame.X() - delta_pt_in_beam_frame.X()*electron_pt_in_beam_frame.Y();
-    double denom = electron_pt_in_beam_frame.R();
+    double num = deltaPt_vec.Y()*electronPt_vec.X() - deltaPt_vec.X()*electronPt_vec.Y();
+    double denom = electronPt_vec.R();
     return num/denom;
   }
 
   //Magnitude of the component of  delta pT parallel to electron pT (MeV)
   double GetDeltaPtY() const{
-    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D();
-    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPt3D();
-
-    ROOT::Math::RotationX r(-beam_tilt);
-
-    //Rotate both back to beam frame
-    ROOT::Math::XYZVector electron_pt_in_beam_frame = r(electronPt_vec);
-    ROOT::Math::XYZVector delta_pt_in_beam_frame = r(deltaPt_vec);
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D(); //returns in beam frame
+    ROOT::Math::XYZVector deltaPt_vec = GetDeltaPt3D(); //returns in beam frame
 
     //std::cout << "\nelectron pT vec: ( " << electron_pt_in_beam_frame.X() << " , " << electron_pt_in_beam_frame.Y() << " , " << electron_pt_in_beam_frame.Z() << " ) " << std::endl;
     //std::cout << "delta pT vec: ( " << delta_pt_in_beam_frame.X() << " , " << delta_pt_in_beam_frame.Y() << " , " << delta_pt_in_beam_frame.Z() << " ) " << std::endl;
@@ -387,8 +362,8 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     //std::cout << "magnitude (norm) of e_pT vec: " << electron_pt_in_beam_frame.R() << std::endl;
     
     //expression for the scalar projection
-    double num = delta_pt_in_beam_frame.Dot(electron_pt_in_beam_frame);
-    double denom = electron_pt_in_beam_frame.R();
+    double num = deltaPt_vec.Dot(electronPt_vec);
+    double denom = electronPt_vec.R();
 
     //std::cout << "final result: " << num/denom << "\n" << std::endl;
     return -num/denom; //negative cause I had it backwards before, this is the correct convention
@@ -396,7 +371,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   
   //Alpha_t, the TKI boosting angle. it's the angle between inverted electron pT and delta pT
   double GetAlphaT() const{
-    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D();
+    ROOT::Math::XYZVector electronPt_vec = GetElectronPt3D(); 
     ROOT::Math::XYZVector deltaPt_vec = GetDeltaPt3D();
 
     //angle between the two vectors
@@ -404,7 +379,6 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     double denominator = ( electronPt_vec.R() * deltaPt_vec.R() );
     double alpha = std::acos(numerator/denominator);
 
-    //std::cout << "boosting angle alpha: " << alpha * 180/pi << std::endl;
     return alpha * 180/pi;  //return alpha in degrees cause that's how I've set up my bins for now
   }
 
@@ -429,7 +403,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   //Apparently that version assumes a CCQE interaction, and after some benchmarking it's NOT correct, so this is the right version
   //in MeV
   double GetDeltaPl() const{
-    double DeltaPt = GetDeltaPt();
+    double DeltaPt = GetDeltaPt(); 
     double mass_nuke = 11188; //Mass of a carbon atom in MeV
     double binding_energy = 27.13; //this value comes from the Furmanski & Sobczyk paper: PhysRevC.95.065501
     
@@ -550,9 +524,10 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
   double GetProtonPTrue() const {
     int i = GetHighestEnergySignalProtonIndex();
     if (i > -1){
-      double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
-      //std::cout << "True (highest) Proton Momentum: " << protonP << std::end; 
-      return protonP;
+      //double protonP = sqrt(pow(GetVecElem("mc_FSPartE", i),2) - pow(M_p, 2));
+      //return protonP;
+      ROOT::Math::XYZVector p(GetVecElem("mc_FSPartPx", i), GetVecElem("mc_FSPartPy", i), GetVecElem("mc_FSPartPz", i));
+      return p.R();
     }
     else {
       return -9999;
@@ -640,31 +615,26 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     double E_other = 0; //sum of total energy of any other particles, NOT INCLUDING NEUTRONS
 
     int nFSPart = GetInt("mc_nFSPart");
-    std::vector<double> FSPartPx = GetVecDouble("mc_FSPartPx");
-    std::vector<double> FSPartPy = GetVecDouble("mc_FSPartPy");
-    std::vector<double> FSPartPz = GetVecDouble("mc_FSPartPz");
     std::vector<double> FSPartE = GetVecDouble("mc_FSPartE");
     std::vector<int> FSPartPDG = GetVecInt("mc_FSPartPDG");
 
-    
     for (int i=0; i<nFSPart; i++){
       if (abs(FSPartPDG[i]) == 11 || abs(FSPartPDG[i]) == 13 || FSPartPDG[i] == 2112 || FSPartPDG[i] > 1000000000){
 	continue; //don't want to count leptons, neutrons, or nuclear remnants
       } else if (FSPartPDG[i] == 2212){ 
-	T_p += FSPartE[i] - M_p; //add only kinetic (not total) energy for protons
+	T_p += (FSPartE[i] - M_p); //add only kinetic (not total) energy for protons
       } else if (abs(FSPartPDG[i]) == 211){ 
-	T_pi += FSPartE[i] - M_pi; //add only kinetic (not total) energy for charged pions
+	T_pi += (FSPartE[i] - M_pi); //add only kinetic (not total) energy for charged pions
       } else if (abs(FSPartPDG[i]) == 111){ 
 	E_pi0 += FSPartE[i]; //add pi0 total energy
       } else if (FSPartPDG[i] > 2000){
-	E_s += FSPartE[i] - M_p; //add total energy - proton mass for strange baryons (why?)
-      } else if (FSPartPDG[i] < 2000){
-	E_sbar += FSPartE[i] + M_p; //add total energy + proton mass for strange antibaryons (why???)
+	E_s += (FSPartE[i] - M_p); //add total energy - proton mass for strange baryons (why?)
+      } else if (FSPartPDG[i] < -2000){
+	E_sbar += (FSPartE[i] + M_p); //add total energy + proton mass for strange antibaryons (why???)
       } else {
-	E_other += FSPartE[i]; //add total energy for anything else (mostly gammas, kaons i think?)
+	E_other += FSPartE[i]; //add total energy for anything else (mostly gammas, kaons, and eta mesons)
       }
     }
-
     double E_avail = T_p + T_pi + E_pi0 + E_s + E_sbar + E_other;
     return E_avail;
   }
@@ -676,15 +646,15 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();      
 
-      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
-      electronPt_vec.SetZ(0);
-      protonPt_vec.SetZ(0);
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
 
-      //do I need to rotate back for this? I don't think so but double check, since I'm only keeping the magnitude
+      ROOT::Math::XYZVector electronPt_vec = electronP_vec - electronPl_vec;
+      ROOT::Math::XYZVector protonPt_vec = protonP_vec - protonPl_vec;
+      
       ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
       return deltaPt_vec.R();
     }
@@ -700,19 +670,24 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();
 
-      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
-      electronPt_vec.SetZ(0);
-      protonPt_vec.SetZ(0);
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
 
-      //Still in beam frame
+      ROOT::Math::XYZVector electronPt_vec = electronP_vec - electronPl_vec;
+      ROOT::Math::XYZVector protonPt_vec = protonP_vec - protonPl_vec;
+
       ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
       double num = deltaPt_vec.Y()*electronPt_vec.X() - deltaPt_vec.X()*electronPt_vec.Y();
       double denom = electronPt_vec.R();
+
+      //double deltaPtX_1 = num/denom;
+      //double deltaPtX_2 = unit_neutrino.Cross(electronPt_vec.Unit()).Dot(deltaPt_vec);
+      //std::cout << "CARLOS TEST, deltaPtX_1 = " << deltaPtX_1 << ", deltaPtX_2 = " << deltaPtX_2 << std::endl;
       return num/denom;
+      //return deltaPtX_2;
     }
     else {
       return -9999;
@@ -726,15 +701,14 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();
 
-      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
-      electronPt_vec.SetZ(0);
-      protonPt_vec.SetZ(0);
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
 
-      //Still in beam frame
+      ROOT::Math::XYZVector electronPt_vec = electronP_vec - electronPl_vec;
+      ROOT::Math::XYZVector protonPt_vec = protonP_vec - protonPl_vec;
       ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;      
 
       double num = deltaPt_vec.Dot(electronPt_vec);
@@ -754,18 +728,19 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();
 
-      ROOT::Math::XYZVector electronP_vec_beam = r(electronP_vec);
-      ROOT::Math::XYZVector protonP_vec_beam = r(protonP_vec);
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
 
       double E_lep = GetVecElem("mc_primFSLepton", 3);
       double E_proton = GetVecElem("mc_FSPartE", i);
       double DeltaPt = GetDeltaPtTrue();
 
       double hit_nucleus = GetDouble("mc_targetZ");
-      double mass_nuke = 11.188*1000;
+      //double mass_nuke = 11.188*1000;
+      double mass_nuke = 11.17486*1000;
       double binding_energy = 27.13;
       // Jeffrey's has an option to adjust TKI based on true nucleus... but it only checks for the nuclei in the target region
       // so it'll miss stuff like hydrogen, silicon, titanium
@@ -788,8 +763,8 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	binding_energy = 27.13;
 	}*/
       
-      double R = mass_nuke + electronP_vec_beam.Z() + protonP_vec_beam.Z() - ( E_lep + E_proton );
-      double numerator = pow(mass_nuke - M_p + binding_energy, 2) + pow(DeltaPt, 2);
+      double R = mass_nuke + electronPl_vec.R() + protonPl_vec.R() - ( E_lep + E_proton );
+      double numerator = pow(mass_nuke - M_n + binding_energy, 2) + pow(DeltaPt, 2);
       
       double DeltaPl = 0.5 * R - numerator/(2*R);
       return DeltaPl;
@@ -814,21 +789,22 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
-      
-      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
-      electronPt_vec.SetZ(0);
-      protonPt_vec.SetZ(0);
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();
+      //ROOT::Math::XYZVector unit_neutrino(0, -0.05882, 0.99827); //assume neutrino came in exactly along beam direction, if I need to test for comparison
 
-      //Still in beam frame
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
+
+      ROOT::Math::XYZVector electronPt_vec = electronP_vec - electronPl_vec;
+      ROOT::Math::XYZVector protonPt_vec = protonP_vec - protonPl_vec;
+
       ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
 
       double numerator = ((-1*electronPt_vec).Dot(deltaPt_vec));
       double denominator = ( electronPt_vec.R() * deltaPt_vec.R() );
       double alpha = std::acos(numerator/denominator);
-      
+
       return alpha * 180/pi;
     }
     else {
@@ -842,15 +818,14 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
       ROOT::Math::XYZVector electronP_vec(GetVecElem("mc_primFSLepton", 0), GetVecElem("mc_primFSLepton", 1), GetVecElem("mc_primFSLepton", 2));
       ROOT::Math::XYZVector protonP_vec(GetVecElem("mc_FSPartPx",i), GetVecElem("mc_FSPartPy",i), GetVecElem("mc_FSPartPz",i));
 
-      ROOT::Math::RotationX r(-beam_tilt); //rotation into beam frame
-      ROOT::Math::RotationX r2(beam_tilt); //rotation back into lab frame
-      
-      ROOT::Math::XYZVector electronPt_vec = r(electronP_vec);
-      ROOT::Math::XYZVector protonPt_vec = r(protonP_vec);
-      electronPt_vec.SetZ(0);
-      protonPt_vec.SetZ(0);
+      ROOT::Math::XYZVector neutrinoP_vec(GetVecElem("mc_incomingPartVec", 0), GetVecElem("mc_incomingPartVec", 1), GetVecElem("mc_incomingPartVec", 2));
+      ROOT::Math::XYZVector unit_neutrino = neutrinoP_vec.Unit();
 
-      //Still in beam frame
+      ROOT::Math::XYZVector electronPl_vec = unit_neutrino * electronP_vec.Dot(unit_neutrino);
+      ROOT::Math::XYZVector protonPl_vec = unit_neutrino * protonP_vec.Dot(unit_neutrino);
+
+      ROOT::Math::XYZVector electronPt_vec = electronP_vec - electronPl_vec;
+      ROOT::Math::XYZVector protonPt_vec = protonP_vec - protonPl_vec;
       ROOT::Math::XYZVector deltaPt_vec = electronPt_vec + protonPt_vec;
 
       double numerator = ((-1*electronPt_vec).Dot(protonPt_vec));
@@ -1175,13 +1150,12 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return GetInt("mc_intType") == 7;
   }
   
-  //This is kind of hacky, might change, but because I'm writing a bunch of proton truth calculators, I don't want to keep finding the 
-  //Highest energy proton from mc_FSPartPDG. So this is a function which should only get called by other functions here in CVUniverse.h
-  //Just returns the index value (in the final state particles array of the particular event) of the highest energy proton
-  //and -9999 if no true protons
-  //
-  //Maybe I can include this in my CCNuEEvent object itself somehow?
+  //returns the index of the true primary proton (highest energy within kinematic signal constraints)
+  //Only does the search once per event, after wards it caches it and that value gets used until CVUniverse->SetEntry is called again (aka we go to the next event)
   int GetHighestEnergySignalProtonIndex() const {
+    if (m_protonIndexCached) { //this resets everytime cvUniv->SetEntry(i) is called
+      return m_cachedProtonIndex; //if we've already found it for this event, don't need to do it again
+    }    
     double highestEnergy = -9999;
     int index = -9999;
     std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
@@ -1198,12 +1172,14 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
 	ROOT::Math::RotationX r(-beam_tilt);
 	double protonTheta = (r(p)).Theta()*(180/pi); //in degrees
 	//if (protonP>450 && protonP<1200 && protonTheta<70){
-	if (protonP>450 && protonP<1200 && (protonTheta<70 || protonTheta>110)){ //Testing allowing backwards protons??
+	if (protonP>450 && protonP<1200 && (protonTheta<70 || protonTheta>110)){ //allow backwards protons
 	  highestEnergy = energies[i];
 	  index = i;
 	}
       }
     }
+    m_cachedProtonIndex = index;
+    m_protonIndexCached = true;
     return index;
   }
 
@@ -1269,7 +1245,7 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     bool hasMeson = false;
     for (int i = 0; i < FSParticles.size(); i++){
       //std::cout << "final state particle: " << i << ": " << FSParticles[i] << std::endl;
-      if (abs(FSParticles[i]) == 211 || abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 111){
+      if (abs(FSParticles[i]) == 211 || abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 111 || abs(FSParticles[i]) == 310){
 	hasMeson = true;
       }
     }
@@ -1277,6 +1253,91 @@ class CVUniverse : public PlotUtils::MinervaUniverse {
     return hasMeson;
   }
 
+  //For background categorization, checks if the event has no mesons other than a single pi plus
+  bool GetHasSinglePiPlus() const { 
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    bool hasSinglePiPlus = false;
+    int nPiPlus = 0;
+    int nPiMinus = 0;
+    int nPi0 = 0;
+    int nKaon = 0;
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (FSParticles[i] == 211){ nPiPlus++; }
+      else if (FSParticles[i] == -211){ nPiMinus++; }
+      else if (FSParticles[i] == 111) { nPi0++; }
+      else if (abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 310){ nKaon++; }
+    }
+    //if (nPiPlus==1 && nPiMinus==0 && nPi0==0 && nKaon==0) { hasSinglePiPlus = true; }
+    if (nPiPlus==1 && nPiMinus==0 && nPi0==0) { hasSinglePiPlus = true; }
+    return hasSinglePiPlus;
+  }
+
+  //For background categorization, checks if the event has no mesons other than a single pi minus
+  bool GetHasSinglePiMinus() const { 
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    bool hasSinglePiMinus = false;
+    int nPiPlus = 0;
+    int nPiMinus = 0;
+    int nPi0 = 0;
+    int nKaon = 0;
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (FSParticles[i] == 211){ nPiPlus++; }
+      else if (FSParticles[i] == -211){ nPiMinus++; }
+      else if (FSParticles[i] == 111) { nPi0++; }
+      else if (abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 310){ nKaon++; }
+    }
+    //if (nPiPlus==0 && nPiMinus==1 && nPi0==0 && nKaon==0) { hasSinglePiMinus = true; }
+    if (nPiPlus==0 && nPiMinus==1 && nPi0==0) { hasSinglePiMinus = true; }
+    return hasSinglePiMinus;
+  }
+
+  //For background categorization, checks if the event has no mesons other than a single pi0 (lepton is still nu_e)
+  bool GetHasSinglePiZero() const { 
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    bool hasSinglePiZero = false;
+    int nPiPlus = 0;
+    int nPiMinus = 0;
+    int nPi0 = 0;
+    int nKaon = 0;
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (FSParticles[i] == 211){ nPiPlus++; }
+      else if (FSParticles[i] == -211){ nPiMinus++; }
+      else if (FSParticles[i] == 111) { nPi0++; }
+      else if (abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 310){ nKaon++; }
+    }
+    //if (nPiPlus==0 && nPiMinus==0 && nPi0==1 && nKaon==0) { hasSinglePiZero = true; }
+    if (nPiPlus==0 && nPiMinus==0 && nPi0==1) { hasSinglePiZero = true; }
+    return hasSinglePiZero;
+  }
+
+  //For background categorization, checks if the event has multiple pions of any type
+  bool GetHasMultiplePions() const { 
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    bool hasMultiPi = false;
+    int nPiPlus = 0;
+    int nPiMinus = 0;
+    int nPi0 = 0;
+    int nKaon = 0;
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (FSParticles[i] == 211){ nPiPlus++; }
+      else if (FSParticles[i] == -211){ nPiMinus++; }
+      else if (FSParticles[i] == 111) { nPi0++; }
+      else if (abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 310){ nKaon++; }
+    }
+    //if ( (nPiPlus + nPiMinus + nPi0)>1 && nKaon==0) { hasMultiPi = true; }
+    if ( (nPiPlus + nPiMinus + nPi0)>1) { hasMultiPi = true; }
+    return hasMultiPi;
+  }
+
+  bool GetHasKaons() const { 
+    std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
+    bool hasKaons = false;
+    for (int i = 0; i < FSParticles.size(); i++){
+      if (abs(FSParticles[i]) == 321 || abs(FSParticles[i]) == 311 || abs(FSParticles[i]) == 130 || abs(FSParticles[i]) == 310){ hasKaons = true; }
+    }
+    return hasKaons;
+  }
+  
   //checks for photons above 10 MeV in final state
   bool GetHasFSPhoton() const {
     std::vector<int> FSParticles = GetVecInt("mc_FSPartPDG");
