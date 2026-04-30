@@ -16,6 +16,7 @@ struct OutputTreeManager {
   //Avoids the triple event filling thing into my tree but jesus this struct is getting out of hand...
   std::map<std::string, std::unordered_set<Long64_t>> filledEntriesPerTree; 
 
+  
   const std::vector<std::string> branches_to_keep = {
     // prong variables
     "prong_part_E",
@@ -86,8 +87,8 @@ struct OutputTreeManager {
     "mc_vtx",
     "mc_Bjorkenx",
     "mc_Bjorkeny",
-    "mc_fr_nuParentID",
-    "mc_fr_nuAncestorID",
+    //"mc_fr_nuParentID",
+    //"mc_fr_nuAncestorID", //special samples seem to not have this branch?
     
     // reco event variables
     "vtx",
@@ -104,10 +105,8 @@ struct OutputTreeManager {
     "Psi",
     "part_response_total_recoil_passive_allNonMuonClusters_id",
     "part_response_total_recoil_passive_allNonMuonClusters_od",
+    //"truth_hadronReweightNPaths",
   };
-
-  //Dummy initialization value, I should never see this value in the output tuple and if I do something got messed up
-  int selectionCategory = -60;
 
   // real selectionCategory values:
   // -999 = signal (green)
@@ -116,7 +115,10 @@ struct OutputTreeManager {
   // 2 = NC Pi0 (pink) bkgd
   // 3 = NuMu CC Pi0 (teal) bkgd
   // -1 = other backgrounds (dark blue)
-
+  //this is a dummy initialization value, I should never see this value in the output tuple and if I do something got messed up
+  int selectionCategory = -60;
+  double cv_weight; 
+  
   //these are to save the results of sideband cuts as an array of ints, matching the order of entries in 
   int n_sideband_cuts;
   TString sideband_names_str;
@@ -134,11 +136,12 @@ struct OutputTreeManager {
     }    
 
     //keep only branches I use, helps reduce run time & file size
+    /*
     inputTree.SetBranchStatus("*", 0);
     for (const auto& b : branches_to_keep) {
       inputTree.SetBranchStatus(b.c_str(), 1); 
     }
-    inputTree.SetBranchStatus("*", 1);
+    */
 
     sideband_names_str = "";
     for (int i = 0; i < sideband_names.size(); i++) {
@@ -149,11 +152,16 @@ struct OutputTreeManager {
     sidebandCutResults.resize(n_sideband_cuts, 0);
     outputTree = inputTree.CloneTree(0);
     outputTree->SetName("MasterAnaDev");
+    //add a branch saving which selection category it was in 
     outputTree->Branch("selectionCategory", &selectionCategory, "selectionCategory/I");
+
+    //also add a branch showing the cv weight the event loop assigned to this event, given the weighters that were turned on and the event kinematics
+    outputTree->Branch("cv_weight", &cv_weight, "cv_weight/D");
+    //Another branch which saves the results of the sideband cuts, so I have access to my signal region & sideband regions in the same tree
     std::string branch_def = "sideband_cut_results[" + std::to_string(n_sideband_cuts) + "]/I";
     //outputTree->Branch("sideband_cut_results", &cutBits, branch_def.c_str());
     outputTree->Branch("sideband_cut_results", sidebandCutResults.data(), branch_def.c_str());
-
+    
     inputTree.SetBranchStatus("*", 1); //unfortunately I think I need this, would run A LOT faster if I could keep those off though...
   }
   
@@ -188,6 +196,8 @@ extern OutputTreeManager g_OutputTreeManager;
 
 struct CCNuEEvent {
     int m_idx; // Index for Best Michel in nmichels
+    int primaryProtonIndex = -9999;
+
     double m_bestdist; // in mm 
     std::vector<double> m_best2D; //0: XZ, 1: UZ, 2:VZ   
     double m_best_XZ;
