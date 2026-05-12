@@ -7,9 +7,6 @@
 //   FitBackgrounds data.root mc.root 1000 Lepton_Pt
 //   input data histos, input mc histos, regularization strength lambda, variable name
 
-//For testing, forces all output scale factors to 1. DON'T LEAVE THIS ON BY ACCIDENT
-bool set_scale_factors_to_1 = false;
-
 #include "util/GetIngredient.h"
 #include "PlotUtils/MnvH1D.h"
 #include "PlotUtils/MnvVertErrorBand.h"
@@ -22,9 +19,14 @@ bool set_scale_factors_to_1 = false;
 #include "TParameter.h"
 #include "TCanvas.h"
 #include "TObjArray.h"
+#include "TColor.h"
 #include <TMatrixD.h>
 #include <TVectorD.h>
 #include <TDecompSVD.h>
+#include <TMath.h>
+#include "Math/Functor.h"
+#include "Math/Minimizer.h"
+#include "Math/Factory.h"
 
 //c++ includes
 #include <iostream>
@@ -34,126 +36,470 @@ bool set_scale_factors_to_1 = false;
 #include <memory>
 #include <algorithm>
 
+//For testing, forces all output scale factors to 1. DON'T LEAVE THIS ON BY ACCIDENT
+const bool set_scale_factors_to_1 = false;
+double mcScale = 1.0;  // will be set in main
+std::string varName = "DeltaPt"; //default value that gets overwritten in main
+
+//const std::vector<std::string> bkgdCategoryNames = {"selected_signal_reco", "background_NuECC_with_pions", "background_Other_NueCC", "background_NC_pi0", "background_CC_Numu_pi0", "background_Other"};
+const std::vector<std::string> bkgdCategoryNames = {"selected_signal_reco", "background_NuECC_nonQELike_single_pi_plus", "background_NuECC_nonQELike_single_pi_zero", "background_NuECC_nonQELike_single_pi_minus", "background_NuECC_nonQELike_Npi", "background_Other_NueCC", "background_NC_pi0", "background_CC_Numu_pi0", "background_Other"};
+const std::vector<std::string> sidebands = {"_", "_MeanFrontDEDXSB_", "_MichelSB_"};
+
+//indices of the different background categories, in the past I had only 1 nonQELike bkg category
+// so if I wanna fit those histograms then I need to use nonQELikeIdx = {1}, pi0Idx = {3, 4}, and fixedIdx = {0, 2, 5}
+//const std::vector<int> nonQELikeIdx = {1};
+//const std::vector<int> pi0Idx = {3, 4};
+//const std::vector<int> fixedIdx = {0,2,5}; // signal + otherNueCC + other
+//const std::vector<int> fixedIdxNoSignal = {2,5}; // otherNueCC + other, for the separate fits where I also calc signal scale factors
+const std::vector<int> nonQELikeIdx = {1,2,3,4};
+const std::vector<int> pi0Idx = {6,7};
+const std::vector<int> fixedIdx = {0,5,8}; // signal + otherNueCC + other
+const std::vector<int> fixedIdxNoSignal = {5,8}; // otherNueCC + other, for the separate fits where I also calc signal scale factors
+
+//Struct to contain the scale factors for each background in each universe, saved as an MnvH1D
 struct ScaleFactors {
   PlotUtils::MnvH1D* meanFrontBkg_mnvhist;
   PlotUtils::MnvH1D* meanFrontSig_mnvhist;
   PlotUtils::MnvH1D* michelBkg_mnvhist;
   PlotUtils::MnvH1D* michelSig_mnvhist;
+
+  void Init(const PlotUtils::MnvH1D* mc_hist) {
+    auto clone = [&](const std::string& suffix) {
+      auto* h = dynamic_cast<PlotUtils::MnvH1D*>(mc_hist->Clone((varName + suffix).c_str()));
+      h->Reset("ICES");
+      return h;
+    };
+    meanFrontBkg_mnvhist = clone("_meanFrontBkg");
+    meanFrontSig_mnvhist = clone("_meanFrontSig");
+    michelBkg_mnvhist    = clone("_michelBkg");
+    michelSig_mnvhist    = clone("_michelSig");
+  }
+  
+  // sets one bin on either CV or a specific universe
+  void SetBin(PlotUtils::MnvH1D* hist, int ib, double val,
+	      bool isCV, const std::string& bandName, int universe_index) {
+    if (isCV) hist->SetBinContent(ib, val);
+    else hist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib, val);
+  }
+  
+  // vals_per_bin: function that maps bin index (1-based) to {meanFrontBkg, meanFrontSig, michelBkg, michelSig}
+  void WriteOutput(int nbins, bool isCV, const std::string& bandName, int universe_index,
+		   std::function<std::array<double,4>(int)> vals_per_bin) {
+    for (int ib = 1; ib <= nbins; ib++) {
+      auto [mfBkg, mfSig, miBkg, miSig] = vals_per_bin(ib);
+      SetBin(meanFrontBkg_mnvhist, ib, mfBkg, isCV, bandName, universe_index);
+      SetBin(meanFrontSig_mnvhist, ib, mfSig, isCV, bandName, universe_index);
+      SetBin(michelBkg_mnvhist,    ib, miBkg, isCV, bandName, universe_index);
+      SetBin(michelSig_mnvhist,    ib, miSig, isCV, bandName, universe_index);
+    }
+  }  
+
 };
+
+struct SidebandData {
+  // bin contents for each region, indexed by [category][region][bin]
+  // regions: 0=signal, 1=meanFront, 2=michel
+  // categories: same as mc_hists indices
+  std::vector<std::vector<std::vector<double>>> mc;  
+  std::vector<std::vector<double>> data;  // [region][bin]
+  bool isCV;
+  int nbins;
+  
+  //loop through provided histograms and fill bin contents (for a single universe)
+  void fillSidebandData(const std::vector<PlotUtils::MnvH1D*>& data_hists, const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists, std::string bandName, int universe_index) {
+
+    //Helper for getting bin content from CV vs one of the error bands
+    auto getBin = [&](PlotUtils::MnvH1D* h, int ib) -> double {
+      if (isCV) return h->GetBinContent(ib) * mcScale;
+      return h->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) * mcScale;
+    };
+    
+    nbins = data_hists[0]->GetNbinsX();
+    int nCategories = mc_hists.size();    // 9
+    int nRegions    = mc_hists[0].size(); // 3
+    mc.assign(nCategories, std::vector<std::vector<double>>(nRegions, std::vector<double>(nbins + 1, 0.0)));
+    
+    for (int cat = 0; cat < nCategories; cat++) {
+      for (int reg = 0; reg < nRegions; reg++) {
+	for (int ib = 1; ib <= nbins; ib++) {
+	  mc[cat][reg][ib] = getBin(mc_hists[cat][reg], ib);
+	}
+      }
+    }
+    data.assign(nRegions, std::vector<double>(nbins + 1, 0.0));
+    for (int reg = 0; reg < nRegions; reg++) {
+      for (int ib = 1; ib <= nbins; ib++) {
+	data[reg][ib] = data_hists[reg]->GetBinContent(ib);
+      }
+    }    
+  }
+
+};
+
+//Helper to sum bins of the bkg categories being considered, as in, combining all the pi0 bkgs or the NonQELike bkgs
+double sumBins(std::vector<int> indices, int region, int ib, std::vector<std::vector<std::vector<double>>> mc){
+  double sum = 0;
+  for (int idx : indices) sum += mc[idx][region][ib];
+  return sum;
+ };	
+
+double Chi2NormOnly(double alpha_nonQELike, double alpha_pi0, 
+                    const SidebandData& sb) {
+    double chi2 = 0;
+    
+    for (int region = 0; region < 3; region++) {
+        for (int ib = 1; ib <= sb.nbins; ib++) {
+            // sum fixed backgrounds (taken as correct, subtracted from data)
+            double fixed = 0;
+            for (int idx : fixedIdx) fixed += sb.mc[idx][region][ib];
+            
+            // predicted = scaled nonQELike + scaled pi0 + fixed
+            double nonQELike_pred = alpha_nonQELike * sumBins(nonQELikeIdx, region, ib, sb.mc);
+            double pi0_pred       = alpha_pi0       * sumBins(pi0Idx,       region, ib, sb.mc);
+            double predicted = nonQELike_pred + pi0_pred + fixed;
+            
+            double observed = sb.data[region][ib];
+            double sigma2 = observed > 0 ? observed : 1.0;  // Poisson: sigma^2 = N
+            
+            chi2 += pow(observed - predicted, 2) / sigma2;
+        }
+    }
+    return chi2;
+}
+
+ScaleFactors ExtractScaleFactors_chi2_simultaneous_normOnly(
+    const std::vector<PlotUtils::MnvH1D*>& data_hists,
+    const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists)
+{
+  ScaleFactors sf;  
+  sf.Init( mc_hists[0][0] );
+
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  vertErrorBandNames.push_back("cv"); //add the cv to the list since it doesn't get returned, this way don't have to write a separate loop
+  
+  for (const auto& bandName : vertErrorBandNames){//Loop over error bands
+    bool isCV = (bandName == "cv");
+    PlotUtils::MnvVertErrorBand* band;
+    int nHists;
+    if (isCV) { nHists = 1; }
+    else {
+      band = mc_hists[0][0]->GetVertErrorBand( bandName );
+      nHists = band->GetNHists();
+    }
+    for (int universe_index = 0; universe_index < nHists; universe_index++){ //Loop over universes within that error band (normally 2, although flux has 100)
+
+      SidebandData sb;
+      sb.isCV = (bandName == "cv");
+      sb.fillSidebandData(data_hists, mc_hists, bandName, universe_index);
+      
+      ROOT::Math::Functor fcn([=](const double* p) { return Chi2NormOnly(p[0], p[1], sb); }, 2);      
+
+      std::unique_ptr<ROOT::Math::Minimizer> min(ROOT::Math::Factory::CreateMinimizer("Minuit2", "Migrad"));
+      min->SetFunction(fcn);
+      min->SetVariable(0, "alpha_nonQELike", 1.0, 0.01);  // start at 1, step 0.01
+      min->SetVariable(1, "alpha_pi0",       1.0, 0.01);
+      min->SetVariableLimits(0, 0.0, 5.0);  // physical constraint: non-negative
+      min->SetVariableLimits(1, 0.0, 5.0);
+      min->Minimize();
+
+      double alpha_nonQELike = min->X()[0];
+      double alpha_pi0       = min->X()[1];
+      double err_nonQELike   = min->Errors()[0];  // from Hessian
+      double err_pi0         = min->Errors()[1];  // these are statistical only uncertainties on the minuit it fit itself (per universe), not sure if I'll use em for anything
+
+      sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {  return std::array<double,4>{ alpha_pi0, 1.0, alpha_nonQELike, 1.0 }; });
+    } //end universe loop within error band
+  } //end error band loop
+  return sf;
+}
+
+double Chi2NormOnly_separate(double alpha, double const_scale_factor, const SidebandData& sb, bool forMeanFront) {
+  double chi2 = 0;  
+  //since this method does the two fits separately, each separate fit considers only signal region + relevant sideband, loop thru twice
+  for (int i = 0; i < 2; i++) {
+    int region;
+    if (i==0) region = 0; //signal region is always the first one
+    else{
+      region = forMeanFront ? 1 : 2; //meanfront index = 1, michel index = 2
+    }
+    for (int ib = 1; ib <= sb.nbins; ib++) {
+      // sum fixed backgrounds (taken as correct, subtracted from data)
+      double fixed = sumBins(fixedIdx, region, ib, sb.mc);
+
+      double nonQELike_pred = 0;
+      double pi0_pred       = 0;
+      // predicted = scaled nonQELike + scaled pi0 + fixed
+      // alpha is the varying scale factor, const_scale_factor is the constant scale factor applied to the bkg not under consideration
+      if (forMeanFront){ 
+	nonQELike_pred = const_scale_factor * sumBins(nonQELikeIdx, region, ib, sb.mc);
+	pi0_pred       = alpha * sumBins(pi0Idx, region, ib, sb.mc);
+      } else { 
+	nonQELike_pred = alpha * sumBins(nonQELikeIdx, region, ib, sb.mc);
+	pi0_pred       = const_scale_factor * sumBins(pi0Idx, region, ib, sb.mc);
+      }
+      double predicted = nonQELike_pred + pi0_pred + fixed;
+      
+      double observed = sb.data[region][ib];
+      double sigma2 = observed > 0 ? observed : 1.0;  // Poisson: sigma^2 = N
+      
+      chi2 += pow(observed - predicted, 2) / sigma2;
+    }
+  }
+  return chi2;
+}
+
+ScaleFactors ExtractScaleFactors_chi2_separate_normOnly( const std::vector<PlotUtils::MnvH1D*>& data_hists, const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists){
+  ScaleFactors sf;  
+  sf.Init( mc_hists[0][0] );
+
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  vertErrorBandNames.push_back("cv"); //add the cv to the list since it doesn't get returned, this way don't have to write a separate loop
+  
+  for (const auto& bandName : vertErrorBandNames){//Loop over error bands
+    bool isCV = (bandName == "cv");
+    PlotUtils::MnvVertErrorBand* band;
+    int nHists;
+    if (isCV) { nHists = 1; }
+    else {
+      band = mc_hists[0][0]->GetVertErrorBand( bandName );
+      nHists = band->GetNHists();
+    }
+    for (int universe_index = 0; universe_index < nHists; universe_index++){ //Loop over universes within that error band (normally 2, although flux has 100)
+
+      SidebandData sb;
+      sb.isCV = (bandName == "cv");
+      sb.fillSidebandData(data_hists, mc_hists, bandName, universe_index);
+
+      double chi2_MF, chi2_Michel;
+      double alpha_nonQELike = 1;
+      double alpha_pi0 = 1;
+      //run 2 fits, one for pi0 scale factor (using meanfront sb + signal region), and one for nonQELike scale factor (using michel + signal region)
+      for (int i=1; i<31; i++){
+	bool forMeanFront = static_cast<bool>(i%2);
+	double const_scale_factor;
+	if (forMeanFront) const_scale_factor = alpha_nonQELike;
+	else const_scale_factor = alpha_pi0;
+	
+	ROOT::Math::Functor fcn([=](const double* p) { return Chi2NormOnly_separate(p[0], const_scale_factor, sb, forMeanFront); }, 1);
+	
+	std::unique_ptr<ROOT::Math::Minimizer> min(ROOT::Math::Factory::CreateMinimizer("Minuit2", "Migrad"));
+	min->SetFunction(fcn);
+	min->SetVariable(0, "alpha", 1.0, 0.01);  // start at 1, step 0.01
+	min->SetVariableLimits(0, 0.0, 5.0);  // physical constraint: non-negative
+	min->Minimize();
+	
+	double alpha = min->X()[0];
+	double err = min->Errors()[0];  // from Hessian
+	double chi2 = min->MinValue();
+	if (forMeanFront) {
+	  alpha_pi0 = alpha;
+	  chi2_MF = min->MinValue();
+	} else {
+	  alpha_nonQELike = alpha;
+	  chi2_Michel = min->MinValue();
+	}
+      }
+      sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {  return std::array<double,4>{ alpha_pi0, 1.0, alpha_nonQELike, 1.0 }; });
+    } //end universe loop within error band
+  } //end error band loop
+  return sf;
+}
+
+ScaleFactors ExtractScaleFactors_simultaneous_binByBin(
+    const std::vector<PlotUtils::MnvH1D*>& data_hists,
+    const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists,
+    double lambda)
+{
+  ScaleFactors sf;  
+  sf.Init(mc_hists[0][0]);
+  
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  vertErrorBandNames.push_back("cv"); //add the cv to the list since it doesn't get returned, this way don't have to write a separate loop
+  
+  for (const auto& bandName : vertErrorBandNames){//Loop over error bands
+    bool isCV = (bandName == "cv");
+    PlotUtils::MnvVertErrorBand* band;
+    int nHists;
+    if (isCV) { nHists = 1; }
+    else {
+      band = mc_hists[0][0]->GetVertErrorBand( bandName );
+      nHists = band->GetNHists();
+    }
+    for (int universe_index = 0; universe_index < nHists; universe_index++){ //Loop over universes within that error band (normally 2, although flux has 100)
+
+      SidebandData sb;
+      sb.isCV = isCV;
+      sb.fillSidebandData(data_hists, mc_hists, bandName, universe_index);
+      
+      // Build the chi2-weighted system Ax = d
+      // unknowns x = [alpha_nonQELike_1, alpha_pi0_1, alpha_nonQELike_2, alpha_pi0_2, ...]
+      int nUnknowns = 2 * sb.nbins;
+      int nEquations = 3 * sb.nbins;  // 3 regions * nbins, all simultaneously
+      int nRegRows = static_cast<int>(lambda > 0 ? (2*(sb.nbins-1)) : 0); //regularization rows, need nbins-1 rows to link neighboring bins of each scale factor, and we have 2 sets of scale factors
+      TMatrixD A(nEquations+nRegRows, nUnknowns);
+      TVectorD d(nEquations+nRegRows);
+      //2 bins, region = 1, ib = 1
+      for (int region = 0; region < 3; region++) {
+	for (int ib = 1; ib <= sb.nbins; ib++) {
+	  int row = region * sb.nbins + (ib-1);
+	  int col_nonQELike = (ib-1) * 2 + 0;
+	  int col_pi0       = (ib-1) * 2 + 1;
+	  
+	  double observed = sb.data[region][ib];
+	  double sigma = observed > 0 ? sqrt(observed) : 1.0;
+	  
+	  //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)
+	  double fixed        = sumBins(fixedIdx,     region, ib, sb.mc);
+	  double nonQELike_mc = sumBins(nonQELikeIdx, region, ib, sb.mc);
+	  double pi0_mc       = sumBins(pi0Idx,       region, ib, sb.mc);
+	  
+	  // divide everything by sigma for chi2 weighting
+	  A(row, col_nonQELike) = nonQELike_mc / sigma;
+	  A(row, col_pi0)       = pi0_mc / sigma;
+	  d(row)                = (observed - fixed) / sigma;
+	}
+      }
+
+      // add smoothness/regularization rows which couple neighboring scale factors together and penalize differences
+      // lambda = 1 means "add one sigma of smoothness penalty"
+      if (lambda > 0) {
+	int regRowStart = nEquations;
+	int r = 0;
+	for (int ib = 1; ib <= sb.nbins - 1; ++ib) {
+	  int row = regRowStart + r++;
+	  double w = std::sqrt(lambda);
+	  //nonQELike regularization rows
+	  int col_nonQELike_pos   = (ib - 1) * 2;
+	  int col_nonQELike_neg = (ib    ) * 2;
+	  A(row, col_nonQELike_pos)   =  w;
+	  A(row, col_nonQELike_neg) = -w;
+	  d(row) = 0.0;
+
+	  //pi0 regulraization rows
+	  int col_pi0_pos = (ib - 1) * 2 + 1;
+	  int col_pi0_neg = (ib    ) * 2 + 1;
+	  A(row + 1, col_pi0_pos) = w;
+	  A(row + 1, col_pi0_neg) = -w;
+	  d(row + 1) = 0.0;
+	  
+	}
+      }
+      
+      TDecompSVD svd(A);
+      Bool_t ok;
+      TVectorD rhs = d;
+      TVectorD x = svd.Solve(rhs, ok);
+      
+      sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {
+	return std::array<double,4>{ x(2*(ib-1)+1), 1.0, x(2*(ib-1)+0), 1.0 };
+      });
+
+    } //end universe loop within error band
+  } //end error band loop
+  return sf;
+}
 
 // data_hists: sidebands in order [signalRegion, meanFrontSB, michelSB] (same as your code)
 // mc_hists: vector per category: mc_hists[cat][sideband_index]
-// mcScale: overall mc normalization
 // lambda: regularization strength (0 => no regularization -> exact per-bin solution)
 // regularizeSignal: whether to regularize signal scale-factors too (default false)
-ScaleFactors ExtractScaleFactors(
+ScaleFactors ExtractScaleFactors_separate_binByBin(
     const std::vector<PlotUtils::MnvH1D*>& data_hists,
     const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists,
-    double mcScale,
-    double lambda,
-    bool regularizeSignal = false)
+    double lambda)
 {
   ScaleFactors sf; //create and prep MnvH1Ds for holding scale factors, unique set per sideband and per universe
-  sf.meanFrontBkg_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
-  sf.meanFrontSig_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
-  sf.michelBkg_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
-  sf.michelSig_mnvhist = dynamic_cast<PlotUtils::MnvH1D*>(mc_hists[0][0]->Clone((mc_hists[0][0]->GetName()+std::string("_clone")).c_str()));
-
-  sf.meanFrontBkg_mnvhist->Reset("ICES");
-  sf.meanFrontSig_mnvhist->Reset("ICES");
-  sf.michelBkg_mnvhist->Reset("ICES");
-  sf.michelSig_mnvhist->Reset("ICES");
+  sf.Init( mc_hists[0][0] );
   
-  const int nbins = data_hists[0]->GetNbinsX();
-  // number of unknowns: for each bin we keep [b(i), s(i)], per fit
-  const int nUnknowns = nbins * 2;
-  
-  auto solve_with_reg = [&](bool forMeanFront) {    
-    const int neq_data = 2 * nbins;
-    const int nRegBkg = std::max(0, nbins - 1);
-    const int nRegSig = (regularizeSignal ? std::max(0, nbins - 1) : 0);
-    const int nRegRows = static_cast<int>(lambda > 0 ? (nRegBkg + nRegSig) : 0);
-
-    const int nRows = neq_data + nRegRows;
-
-    std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
-    vertErrorBandNames.push_back("cv"); //add the cv to the list since it doesn't get returned, this way don't have to write a separate loop
+  std::vector<std::string> vertErrorBandNames = mc_hists[0][0]->GetVertErrorBandNames();
+  vertErrorBandNames.push_back("cv"); //add the cv to the list since it doesn't get returned, this way don't have to write a separate loop
     
-    size_t band_index = 0;
-    //std::cout << "======================= BEGINNING LOOP OVER ERROR BANDS ========================" << std::endl;
-    for (const auto& bandName : vertErrorBandNames){//Loop over error bands
-      bool isCV = (bandName == "cv");
-      PlotUtils::MnvVertErrorBand* band;
-      int nHists;
-      if (isCV) { nHists = 1; }
-      else {
-	band = mc_hists[0][0]->GetVertErrorBand( bandName );
-	nHists = band->GetNHists();
-      }
-      //std::cout << "Currently on band #" << band_index << ", which is: " << bandName << " and contains " << nHists << " universes/histograms. " << std::endl;
-      for (int universe_index = 0; universe_index < nHists; universe_index++){ //Loop over universes within that error band (normally 2, although flux has 100)
-	//std::cout << "---------- universe " << universe_index << " in band " << bandName << ": now looping through its bins. ----------" << std::endl;
-	//if (bandName == "GENIE_FrAbs_N") { std::cout << "---------- universe " << universe_index << " in band " << bandName << ": now looping through its bins. ----------" << std::endl; }
-	
+  for (const auto& bandName : vertErrorBandNames){//Loop over error bands
+    bool isCV = (bandName == "cv");
+    PlotUtils::MnvVertErrorBand* band;
+    int nHists;
+    if (isCV) { nHists = 1; }
+    else {
+      band = mc_hists[0][0]->GetVertErrorBand( bandName );
+      nHists = band->GetNHists();
+    }
+    for (int universe_index = 0; universe_index < nHists; universe_index++){ //Loop over universes within that error band (normally 2, although flux has 100)
+      
+      SidebandData sb;
+      sb.isCV = isCV;
+      sb.fillSidebandData(data_hists, mc_hists, bandName, universe_index);
+
+      int nRows = 2*sb.nbins;
+      int nUnknowns = 1*sb.nbins;
+      int nRegRows = static_cast<int>(lambda > 0 ? (sb.nbins-1) : 0); 
+      int region;
+      std::vector<double> alpha_nonQELike(sb.nbins, 1.0);
+      std::vector<double> alpha_pi0(sb.nbins, 1.0);
+      for (int i=1; i<31; i++){ //number of back and forth iterations...
+	bool forMeanFront = static_cast<bool>(i%2); //want this to flip flop every iteration...
+	region = forMeanFront ? 1 : 2;
+
 	TMatrixD A(nRows, nUnknowns); // zero-initialized
 	TVectorD d(nRows);            // RHS
-	
-	for (int ib = 1; ib <= nbins; ++ib) {
-	  int row0 = (ib - 1) * 2;
-	  double data_signal_region = data_hists[0]->GetBinContent(ib);
-	  double data_sb = forMeanFront ? data_hists[1]->GetBinContent(ib) : data_hists[2]->GetBinContent(ib);
-	  
-	  double d_s, d_sb, other_s, other_sb;
-	  double mc_sig_s, mc_sig_sb, mc_bkg_s, mc_bkg_sb;
+	for (int ib = 1; ib <= sb.nbins; ++ib) {
+	  double predicted_SR; //mc prediction of ONLY the relevant mc contribution in signal region
+	  double predicted_SB; //same thing in sideband region (these things are pi0 bkgs and mean front dedx respectively, or nonQELike bkgs and michel SB respectively)
+	  double observed_SR = sb.data[0][ib];
+	  double observed_SB = sb.data[region][ib];
+	  double sigma_SR = observed_SR > 0 ? sqrt(observed_SR) : 1.0;
+	  double sigma_SB = observed_SR > 0 ? sqrt(observed_SR) : 1.0;
 
-	  if (isCV){
-	    mc_sig_s = mc_hists[0][0]->GetBinContent(ib) * mcScale; // signal in signal region
-	    mc_sig_sb = mc_hists[0][ forMeanFront ? 1 : 2 ]->GetBinContent(ib) * mcScale; // signal in corresponding sideband
-	  
-	    if (forMeanFront) {
-	      other_s = (mc_hists[1][0]->GetBinContent(ib) + mc_hists[2][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale;
-	      other_sb= (mc_hists[1][1]->GetBinContent(ib) + mc_hists[2][1]->GetBinContent(ib) + mc_hists[5][1]->GetBinContent(ib)) * mcScale;
-	      mc_bkg_s  = (mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib)) * mcScale;
-	      mc_bkg_sb = (mc_hists[3][1]->GetBinContent(ib) + mc_hists[4][1]->GetBinContent(ib)) * mcScale;
-	    } else {
-	      other_s = (mc_hists[2][0]->GetBinContent(ib) + mc_hists[3][0]->GetBinContent(ib) + mc_hists[4][0]->GetBinContent(ib) + mc_hists[5][0]->GetBinContent(ib)) * mcScale;
-	      other_sb= (mc_hists[2][2]->GetBinContent(ib) + mc_hists[3][2]->GetBinContent(ib) + mc_hists[4][2]->GetBinContent(ib) + mc_hists[5][2]->GetBinContent(ib)) * mcScale;
-	      mc_bkg_s  = (mc_hists[1][0]->GetBinContent(ib)) * mcScale;
-	      mc_bkg_sb = (mc_hists[1][2]->GetBinContent(ib)) * mcScale; // for michel, index 2 sideband	    
-	    }
-	  }
-	  else { //not cv, have to grab specifically by errorband and universe. Dear lord this is ugly
-	    mc_sig_s = mc_hists[0][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) * mcScale; // signal in signal region
-	    mc_sig_sb = mc_hists[0][ forMeanFront ? 1 : 2 ]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) * mcScale; // signal in corresponding sideband
-	  
-	    if (forMeanFront) {
-	      other_s = (mc_hists[1][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[2][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      other_sb= (mc_hists[1][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[2][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      mc_bkg_s  = (mc_hists[3][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      mc_bkg_sb = (mc_hists[3][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][1]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	    } else {
-	      other_s = (mc_hists[2][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[3][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      other_sb= (mc_hists[2][2]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[3][2]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[4][2]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib) + mc_hists[5][2]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      mc_bkg_s  = (mc_hists[1][0]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale;
-	      mc_bkg_sb = (mc_hists[1][2]->GetVertErrorBand(bandName)->GetHist(universe_index)->GetBinContent(ib)) * mcScale; // for michel, index 2 sideband	    
-	    }
+          //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)                                           
+          double fixed_SR     = sumBins(fixedIdx,     0, ib, sb.mc);
+          double nonQELike_SR = sumBins(nonQELikeIdx, 0, ib, sb.mc);
+          double pi0_SR       = sumBins(pi0Idx,       0, ib, sb.mc);
+
+	  //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)                                           
+          double fixed_SB     = sumBins(fixedIdx,     region, ib, sb.mc);
+          double nonQELike_SB = sumBins(nonQELikeIdx, region, ib, sb.mc);
+          double pi0_SB       = sumBins(pi0Idx,       region, ib, sb.mc);
+
+	  if (forMeanFront) {
+	    predicted_SR = pi0_SR;
+	    predicted_SB = pi0_SB;
+	    observed_SR = observed_SR - (alpha_nonQELike[ib-1]*nonQELike_SR + fixed_SR);
+	    observed_SB = observed_SB - (alpha_nonQELike[ib-1]*nonQELike_SB + fixed_SB);
+	  } else {
+	    predicted_SR = nonQELike_SR;
+	    predicted_SB = nonQELike_SB;
+	    observed_SR = observed_SR - (alpha_pi0[ib-1]*pi0_SR + fixed_SR);
+	    observed_SB = observed_SB - (alpha_pi0[ib-1]*pi0_SB + fixed_SB);
 	  }
 
-	  d_s = data_signal_region - other_s;
-	  d_sb = data_sb - other_sb;
-	    
-	  int col_b = (ib - 1) * 2 + 0; // background position for bin i
-	  int col_s = (ib - 1) * 2 + 1; // signal position for bin i
+	  int row_SR = (ib-1)*2;
+	  int row_SB = (ib-1)*2 + 1;
+	  A(row_SR, ib-1) = predicted_SR / sigma_SR;
+	  A(row_SB, ib-1) = predicted_SB / sigma_SB ;
+	  d(row_SR) = observed_SR / sigma_SR;
+	  d(row_SB) = observed_SB / sigma_SB;
 	  
-	  A(row0, col_b) = mc_bkg_s;
-	  A(row0, col_s) = mc_sig_s;
-	  d(row0)       = d_s;
-	  
-	  A(row0+1, col_b) = mc_bkg_sb;
-	  A(row0+1, col_s) = mc_sig_sb;
-	  d(row0+1)       = d_sb;
 	} // end bin loop for data eqs
 	
+	// Minimize chi2: ||A x - d|| using SVD
+	TDecompSVD svd(A);
+	Bool_t ok;
+	TVectorD rhs = d;            // copy RHS because Solve modifies it
+	TVectorD x = svd.Solve(rhs, ok); // vector of length nUnknowns: [b1,s1,b2,s2,...]
+	if (forMeanFront) {
+	  for (int jb=0; jb < sb.nbins; jb++){
+	    alpha_pi0[jb] = x(jb);
+	  }
+	} else {
+	  for (int jb=0; jb < sb.nbins; jb++){
+	    alpha_nonQELike[jb] = x(jb);
+	  }
+	}
+      }
+      sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {
+	return std::array<double,4>{ alpha_pi0[ib-1], 1.0, alpha_nonQELike[ib-1], 1.0 };
+      });
+
+      /*
 	// Add regularization rows after the data rows
 	int regRowStart = neq_data;
 	int r = 0;
@@ -178,60 +524,14 @@ ScaleFactors ExtractScaleFactors(
 	      A(row, col_s_i)   =  w;
 	      A(row, col_s_ip1) = -w;
 	      d(row) = 0.0;
-	    }
+	    }	    
 	  }
-	}
-	
-	// Solve least-squares: minimize ||A x - d|| using SVD
-	TDecompSVD svd(A);
-	Bool_t ok;
-	TVectorD rhs = d;            // copy RHS because Solve modifies it
-	TVectorD x = svd.Solve(rhs, ok); // vector of length nUnknowns: [b1,s1,b2,s2,...]
-	if (!ok) {
-	  std::cerr << "Warning: SVD solve failed (singular). Returning unity scales.\n";
-	  TVectorD one(nUnknowns);
-	  for (int i = 0; i < nUnknowns; ++i) one(i) = 1.0;
-	  //return one;
-	}
-	//Manually set everything to 1 for testing, DON'T LEAVE THIS ON BY ACCIDENT
-	if (set_scale_factors_to_1){
-	  for (int i = 0; i < nUnknowns; ++i) x(i) = 1.0;
-	}
-	//Write output to my struct's MnvH1Ds, per universe.
-	if (isCV){
-	  for (int ib = 0; ib < nbins; ++ib) { //double check that this is right, setBinContent(0, ...) does the underflow bin I think...
-	    if (forMeanFront){
-	      sf.meanFrontBkg_mnvhist->SetBinContent(ib+1, x(2*ib + 0));
-	      sf.meanFrontSig_mnvhist->SetBinContent(ib+1, x(2*ib + 1));
-	    } else {
-	      sf.michelBkg_mnvhist->SetBinContent(ib+1, x(2*ib + 0));
-	      sf.michelSig_mnvhist->SetBinContent(ib+1, x(2*ib + 1));
-	    }
-	  }
-	}
-	else { //not the CV, so all other universes
-	  for (int ib = 0; ib < nbins; ++ib) { //double check that this is right, setBinContent(0, ...) does the underflow bin I think...
-	    if (forMeanFront){
-	      sf.meanFrontBkg_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib+1, x(2*ib + 0));
-	      sf.meanFrontSig_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib+1, x(2*ib + 1));
-	    } else {
-	      sf.michelBkg_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib+1, x(2*ib + 0));
-	      sf.michelSig_mnvhist->GetVertErrorBand(bandName)->GetHist(universe_index)->SetBinContent(ib+1, x(2*ib + 1));
-	    } 
-	  }  //end bin loop for output writing
-	}  //else statement for nonCV universes
-      }  //end loop over universes within an error band
-      band_index++;
-    }  //end loop over error bands
-  }; // end lambda solve_with_reg
-
-  // run meanFront fit
-  solve_with_reg(true);
-  // run michel fit
-  solve_with_reg(false);
-
+      } 
+	*/
+    }  //end loop over universes within an error band
+  }//end loop over error bands
   return sf;
-} 
+}
 
 
 void saveSFPlot(PlotUtils::MnvH1D* mnvhist, const std::string& filename) {
@@ -259,46 +559,46 @@ void saveSFPlot(PlotUtils::MnvH1D* mnvhist, const std::string& filename) {
 
 void saveStackPlot(PlotUtils::MnvH1D* data, const std::vector<PlotUtils::MnvH1D*>& mc_scaled,
 		   const std::string& outName, const std::string& titleSuffix, double dataPOT, double mcPOT) {
-    // set titles (use python's ordering & labels)
-    std::vector<std::string> labels = {
-      "signal (nu_e QELike + proton)",
-      "nu_e nonQE (has FS mesons)",
-      "Other nu_eCC",
-      "NC with pi0",
-      "nu_mu CC with pi0",
-      "other"
-    };
-    PlotUtils::MnvPlotter plotter;
-    plotter.legend_text_size = 0.015;
-    plotter.data_line_width = 2;
-    plotter.data_marker_size = 1.5;
-    
-    // MC category colors 
-    const std::vector<int> mcColors = {4, 7, 6, 2, 5, 416};
-    int arr_int[6];
-    for (size_t i=0;i<mcColors.size();++i) arr_int[i]=mcColors[i];
-    int* arr = arr_int;
-    const double mcScale = dataPOT / mcPOT;
+  // set titles (use python's ordering & labels)
 
-    for (size_t c=0;c<mc_scaled.size();++c) {
-      mc_scaled[c]->SetTitle(labels[c].c_str());
-      mc_scaled[c]->SetLineColor(kBlack);
-      mc_scaled[c]->SetFillColor(mcColors[c]);
-      mc_scaled[c]->SetLineWidth(1);
-    }
-    plotter.mc_line_width = 2;
-    data->SetTitle("data");
-    // Create TObjArray in reverse order so the stack looks like python (signal on top)
-    TObjArray array;
-    array.SetOwner(false);
-    for (int k = (int)mc_scaled.size()-1; k >= 0; --k) { array.Add(mc_scaled[k]); }
-
-    std::unique_ptr<TCanvas> c(new TCanvas("c", "", 1200, 900));
-    //plotter.DrawDataStackedMC(data_hists[s], &arr, nullptr, mcScale, "TR", "Data", 1001, data_hists[0]->GetXaxis()->GetTitle(), "N events");
-    plotter.DrawDataStackedMC(data, &array, arr, mcScale, "TR", "Data", 1001, data->GetXaxis()->GetTitle(), "N events");
-    plotter.AddPOTNormBox(dataPOT, mcPOT, 0.3, 0.85);
-    c->SaveAs(outName.c_str());
-  };
+  std::vector<std::string> labels;
+  std::vector<int> mcColors;
+  if (bkgdCategoryNames.size() == 6) {
+    labels = {"signal (nu_e QELike + proton)", "nu_e nonQE (has FS mesons)", "Other nu_eCC", "NC with pi0", "nu_mu CC with pi0", "other"};
+    mcColors = {4, 7, 6, 2, 5, 416};
+  } else if (bkgdCategoryNames.size() == 9) {
+    labels = { "Signal", "Single #pi^{+}", "Single #pi^{-}", "Single #pi^{0}", "N#pi", "Other #nu_{e}CC", "NC with #pi^{0}", "#nu_{#mu}CC with #pi^{0}", "other"};
+    mcColors = { TColor::GetColor("#0000FF"), TColor::GetColor("#00FFFF"), TColor::GetColor("#FF00FF"), TColor::GetColor("#FF0000"), TColor::GetColor("#FF8C00"), TColor::GetColor("#FFA500"), TColor::GetColor("#FFD700"), TColor::GetColor("#FFFF99"), kGreen};
+  }
+  
+  PlotUtils::MnvPlotter plotter;
+  plotter.legend_text_size = 0.015;
+  plotter.data_line_width = 2;
+  plotter.data_marker_size = 1.5;
+  
+  int arr_int[bkgdCategoryNames.size()];
+  for (size_t i=0;i<mcColors.size();++i) arr_int[i]=mcColors[i];
+  int* arr = arr_int;
+  
+  for (size_t c=0;c<mc_scaled.size();++c) {
+    mc_scaled[c]->SetTitle(labels[c].c_str());
+    mc_scaled[c]->SetLineColor(kBlack);
+    mc_scaled[c]->SetFillColor(mcColors[c]);
+    mc_scaled[c]->SetLineWidth(1);
+  }
+  plotter.mc_line_width = 2;
+  data->SetTitle("data");
+  // Create TObjArray in reverse order so the stack looks like python (signal on top)
+  TObjArray array;
+  array.SetOwner(false);
+  for (int k = (int)mc_scaled.size()-1; k >= 0; --k) { array.Add(mc_scaled[k]); }
+  
+  std::unique_ptr<TCanvas> c(new TCanvas("c", "", 1200, 900));
+  //plotter.DrawDataStackedMC(data_hists[s], &arr, nullptr, mcScale, "TR", "Data", 1001, data_hists[0]->GetXaxis()->GetTitle(), "N events");
+  plotter.DrawDataStackedMC(data, &array, arr, mcScale, "TR", "Data", 1001, data->GetXaxis()->GetTitle(), "N events");
+  plotter.AddPOTNormBox(dataPOT, mcPOT, 0.3, 0.85);
+  c->SaveAs(outName.c_str());
+};
 
 // Copy all top-level keys from inputFilePath whose name contains 'prefix'
 // except those in skipNames. Also copy any TParameter with "POT" in the name
@@ -391,8 +691,7 @@ int main(int argc, char** argv) {
 
   const char* dataPath = argv[1];
   const char* mcPath   = argv[2];
-  double lambda = std::stod(argv[3]);
-  std::string varName = "DeltaPt";
+  int method = std::stod(argv[3]);
   if (argc >= 5) varName = argv[4]; //if a variable name is provided, use it, otherwise default to DeltaPt
 
   std::cout << "varName = " << varName << std::endl;
@@ -429,19 +728,14 @@ int main(int argc, char** argv) {
       if (p) dataPOT = p->GetVal();
     }
   }
-  const double mcScale = dataPOT / mcPOT;
+  mcScale = dataPOT / mcPOT;
   std::cout << "mc POT scale = " << mcScale << "  (dataPOT=" << dataPOT << ", mcPOT=" << mcPOT << ")\n";
 
-  const std::vector<std::string> bkgdCategoryNames = {
-    "selected_signal_reco", "background_NuECC_with_pions", "background_Other_NueCC",
-    "background_NC_pi0", "background_CC_Numu_pi0", "background_Other"
-  };
-  const std::vector<std::string> sidebands = {"_", "_MeanFrontDEDXSB_", "_MichelSB_"};
 
   // Load histograms (MnvH1D) for data & MC
   std::vector<PlotUtils::MnvH1D*> data_hists;
-  std::vector<std::vector<PlotUtils::MnvH1D*>> mc_hists(6); // 6 categories, each has 3 sidebands. First index is background category(0 to 5), second index is sideband region (0=sig region, 1=meanFrontdEdX, 2=michel)
-
+  std::vector<std::vector<PlotUtils::MnvH1D*>> mc_hists( bkgdCategoryNames.size() );
+  
   for (size_t s = 0; s < sidebands.size(); ++s) {
     std::string dataName = varName + sidebands[s] + "data";
     PlotUtils::MnvH1D* d = nullptr;
@@ -464,12 +758,46 @@ int main(int argc, char** argv) {
     }
   }
 
-  ScaleFactors sfs = ExtractScaleFactors(data_hists, mc_hists, mcScale, lambda);
+  std::cout << "Now trying to extract scale factors..." << std::endl;
+  ScaleFactors sfs;
+  std::string methodName;
+  if (method==0) {
+    methodName = "simultaneous_norm_only";
+    sfs = ExtractScaleFactors_chi2_simultaneous_normOnly(data_hists, mc_hists);
+  }
+  else if (method==1) {
+    methodName = "iterated_norm_only";
+    sfs = ExtractScaleFactors_chi2_separate_normOnly(data_hists, mc_hists);
+  }
+  else if (method==2) {
+    methodName = "iterated_bin_by_bin";    
+    sfs = ExtractScaleFactors_separate_binByBin(data_hists, mc_hists, 0);
+  }
+  else if (method==3) {
+    methodName = "simultaneous_bin_by_bin";    
+    sfs = ExtractScaleFactors_simultaneous_binByBin(data_hists, mc_hists, 0);
+  }
+  std::cout << "Succeeded" << std::endl; 
+
+  int nbins = data_hists[0]->GetNbinsX();
+  /*
+  std::cout << "pi0 scale factors      : [";
+  for (int i=0; i<nbins; i++){
+    if (i==(nbins-1)) std::cout << sfs.meanFrontBkg_mnvhist->GetBinContent(i+1) << "]" << std::endl;
+    else std::cout << sfs.meanFrontBkg_mnvhist->GetBinContent(i+1) << ", ";
+  }
+  std::cout << "nonQELike scale factors: [";
+  for (int i=0; i<nbins; i++){
+    if (i==(nbins-1)) std::cout << sfs.michelBkg_mnvhist->GetBinContent(i+1) << "]" << std::endl;
+    else std::cout << sfs.michelBkg_mnvhist->GetBinContent(i+1) << ", ";
+  }
+  */
+  
   // Save each scale factor histogram
-  saveSFPlot(sfs.meanFrontBkg_mnvhist, "meanFront_bkg_scale_factors");
-  saveSFPlot(sfs.meanFrontSig_mnvhist, "meanFront_sig_scale_factors");
-  saveSFPlot(sfs.michelBkg_mnvhist,  "michel_bkg_scale_factors");
-  saveSFPlot(sfs.michelSig_mnvhist,  "michel_sig_scale_factors");
+  saveSFPlot(sfs.meanFrontBkg_mnvhist, varName + methodName + "_meanFront_bkg_scale_factors");
+  //saveSFPlot(sfs.meanFrontSig_mnvhist, varName + methodName + "meanFront_sig_scale_factors");
+  saveSFPlot(sfs.michelBkg_mnvhist, varName + methodName + "michel_bkg_scale_factors");
+  //saveSFPlot(sfs.michelSig_mnvhist, varName + methodName + "michel_sig_scale_factors");
  
   // --- lil lambda function to build scaled versions for a given sideband index s:
   // For s==0 (signal region): leave signal unscaled, apply michel SF to 1, and apply meanFront SF to 3&4
@@ -489,21 +817,24 @@ int main(int argc, char** argv) {
 	if (s == 1){ clone->Multiply(clone, sfs.meanFrontSig_mnvhist); } 
 	else if (s == 2){ clone->Multiply(clone, sfs.michelSig_mnvhist); }
       }
-      if (c == 1) { //NonQELike yellow category, scale by michel scale factors
-	if (s == 0 || s == 2){ clone->Multiply(clone, sfs.michelBkg_mnvhist); }
+      if (std::find(nonQELikeIdx.begin(), nonQELikeIdx.end(), c) != nonQELikeIdx.end()) { //NonQELike yellow categories, scaled by michel scale factors
+	//if (s == 0 || s == 2){ clone->Multiply(clone, sfs.michelBkg_mnvhist); }
+	clone->Multiply(clone, sfs.michelBkg_mnvhist);
       }
-      if (c == 3 || c == 4) { //NC Pi0 (purple) and NumuCC Pi0 (teal), scale by mean front dE/dX scale factors
-	if (s == 0 || s == 1){ clone->Multiply(clone, sfs.meanFrontBkg_mnvhist); }
+      if (std::find(pi0Idx.begin(), pi0Idx.end(), c) != pi0Idx.end()) { //NC Pi0 (purple) and NumuCC Pi0 (teal), scale by mean front dE/dX scale factors
+	//if (s == 0 || s == 1){ clone->Multiply(clone, sfs.meanFrontBkg_mnvhist); }
+	clone->Multiply(clone, sfs.meanFrontBkg_mnvhist);
       }
 
       scaled[c] = clone;
-      }
+    }
     return scaled;
   };
-      
-  auto finalSignalScaled = applyScaleFactors(0); //signal region, signal is NOT scaled
-  auto meanScaled = applyScaleFactors(1); //mean front region, with signal also scaled
-  auto michelScaled = applyScaleFactors(2); //michel region, with signal also scaled
+
+  //apply scale factors returns a vector of mnvh1ds, one for each category
+  auto finalSignalScaled = applyScaleFactors(0); 
+  auto meanScaled = applyScaleFactors(1); 
+  auto michelScaled = applyScaleFactors(2); 
 
   // meanFront SB plot
   saveStackPlot(data_hists[1], meanScaled, (varName + "_MeanFrontSB_scaled.png"), "MeanFront SB scaled", dataPOT, mcPOT);
@@ -512,22 +843,68 @@ int main(int argc, char** argv) {
   // final signal region
   saveStackPlot(data_hists[0], finalSignalScaled, (varName + "_SignalRegion_finalScaled.png"), "Signal region final scaled", dataPOT, mcPOT);
 
+  //Now calculate a chi2 for each scaled region, and a total chi2 which is the sum of all of them.
+  double chi2_SR = 0;
+  double chi2_MF = 0;
+  double chi2_Michel = 0;
+  for (int region = 0; region<3; region++){
+    for (int ib=1; ib <= nbins; ib++){
+      double observed = data_hists[region]->GetBinContent(ib);
+
+      std::vector<PlotUtils::MnvH1D*> mc_region;
+      if (region==0) mc_region = finalSignalScaled;
+      else if (region==1) mc_region = meanScaled;
+      else if (region==2) mc_region = michelScaled;
+      double predicted = 0;
+      for (auto cat: mc_region){
+	predicted += cat->GetBinContent(ib);
+      }
+      predicted *= mcScale;
+
+      double chi2_bin = 0.0;
+      if (predicted == 0.0 && observed == 0.0) {
+	chi2_bin = 0.0;
+      } else if (observed == 0.0) {
+	chi2_bin = predicted * predicted;  // sigma^2 = 1 fallback
+      } else if (predicted == 0.0) {
+	chi2_bin = observed;  // (obs-0)^2/obs = obs, print warning
+	std::cerr << "Warning: zero prediction with " << observed 
+		  << " observed events in bin " << ib << std::endl;
+      } else {
+	chi2_bin = pow(observed - predicted, 2) / observed;
+      }
+      if (region==0) chi2_SR += chi2_bin;
+      else if (region==1) chi2_MF += chi2_bin;
+      else if (region==2) chi2_Michel += chi2_bin;
+    }
+  }
+
+  int ndof;
+  if ( (method==0) | (method==1) ) { ndof = 3*nbins - 2; } //for the normOnly fit 
+  else if ( (method==2) | (method==3) ) { ndof = nbins; }
+
+  double chi2_total_per_ndof = (chi2_SR + chi2_MF + chi2_Michel) / ndof;
+  std::cout << "Total chi2 per ndof = " << chi2_total_per_ndof << std::endl;
+  std::cout << "  chi2 contribution from signal region = " << chi2_SR << std::endl;
+  std::cout << "  chi2 contribution from meanFront SB  = " << chi2_MF << std::endl;
+  std::cout << "  chi2 contribution from Michel SB     = " << chi2_Michel << std::endl;
+
+  std::ofstream csv("chi2_results.csv", std::ios::app);  // append mode
+  csv << varName << ", " << methodName << ", " << chi2_total_per_ndof << ", "
+      << chi2_SR << ", " << chi2_MF << ", " << chi2_Michel << "\n";
   // ---------------------------
   // Write output root file containing the signal-region scaled MC histograms with original names.
   // give em the same names as the originals so ExtractCrossSection works as intended
   // ---------------------------
-  TFile* outFile = TFile::Open("scaled_mc.root", "RECREATE");
+  //TFile* outFile = TFile::Open("scaled_mc.root", "RECREATE"); 
+  TFile* outFile = TFile::Open(("scaled_" + varName + "_" + methodName + "_mc.root").c_str(), "RECREATE");
   if (!outFile || outFile->IsZombie()) {
     std::cerr << "ERROR: couldn't open scaled_mc.root for writing\n";
   } else {
-    std::vector<std::string> modifiedNames = {
-      varName + "_selected_signal_reco",
-      varName + "_background_NuECC_with_pions",
-      varName + "_background_Other_NueCC",
-      varName + "_background_NC_pi0",
-      varName + "_background_CC_Numu_pi0",
-      varName + "_background_Other"
-    };
+    std::vector<std::string> modifiedNames = {};
+    for (auto cat: bkgdCategoryNames){
+      modifiedNames.push_back(varName + "_" + cat);
+    }
     //outFile->cd();
     // Copy all other objects from the mc input with prefix varName
     // (preserving key names), and copy POTUsed/TParameter(POT*) as well.
@@ -549,11 +926,9 @@ int main(int argc, char** argv) {
     sfs.michelBkg_mnvhist->Write();
     sfs.michelSig_mnvhist->Write();
         
-    std::cout << "Writing complete\n";
     // flush and close
     outFile->Close();
     delete outFile;
-    std::cout << "outFile closed and deleted successfully\n";
   }
 
   delete dataFile;
