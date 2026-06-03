@@ -143,13 +143,15 @@ double sumBins(std::vector<int> indices, int region, int ib, std::vector<std::ve
   return sum;
  };	
 
+//calculates a chi^2 value between the data (obsreved) and the MC (predicted), using a single overall scale factor per bkg
+// this function is what gets passed to Minuit2 and minimized, using the scale factors as parameters
 double Chi2NormOnly(double alpha_nonQELike, double alpha_pi0, 
                     const SidebandData& sb) {
     double chi2 = 0;
     
     for (int region = 0; region < 3; region++) {
         for (int ib = 1; ib <= sb.nbins; ib++) {
-            // sum fixed backgrounds (taken as correct, subtracted from data)
+            // sum fixed backgrounds (assume they're correct, subtract from data without any scaling)
             double fixed = 0;
             for (int idx : fixedIdx) fixed += sb.mc[idx][region][ib];
             
@@ -159,7 +161,7 @@ double Chi2NormOnly(double alpha_nonQELike, double alpha_pi0,
             double predicted = nonQELike_pred + pi0_pred + fixed;
             
             double observed = sb.data[region][ib];
-            double sigma2 = observed > 0 ? observed : 1.0;  // Poisson: sigma^2 = N
+            double sigma2 = observed > 0 ? observed : 1.0;  // Poisson uncertainty: sigma^2 = N
             
             chi2 += pow(observed - predicted, 2) / sigma2;
         }
@@ -205,7 +207,7 @@ ScaleFactors ExtractScaleFactors_chi2_simultaneous_normOnly(
       double alpha_nonQELike = min->X()[0];
       double alpha_pi0       = min->X()[1];
       double err_nonQELike   = min->Errors()[0];  // from Hessian
-      double err_pi0         = min->Errors()[1];  // these are statistical only uncertainties on the minuit it fit itself (per universe), not sure if I'll use em for anything
+      double err_pi0         = min->Errors()[1];  // these are statistical only uncertainties on the minuit fit itself (per universe), not sure yet if I'll use em for anything
 
       sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {  return std::array<double,4>{ alpha_pi0, 1.0, alpha_nonQELike, 1.0 }; });
     } //end universe loop within error band
@@ -308,7 +310,7 @@ ScaleFactors ExtractScaleFactors_chi2_separate_normOnly( const std::vector<PlotU
 ScaleFactors ExtractScaleFactors_simultaneous_binByBin(
     const std::vector<PlotUtils::MnvH1D*>& data_hists,
     const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists,
-    double lambda)
+    long long lambda)
 {
   ScaleFactors sf;  
   sf.Init(mc_hists[0][0]);
@@ -336,8 +338,9 @@ ScaleFactors ExtractScaleFactors_simultaneous_binByBin(
       int nUnknowns = 2 * sb.nbins;
       int nEquations = 3 * sb.nbins;  // 3 regions * nbins, all simultaneously
       int nRegRows = static_cast<int>(lambda > 0 ? (2*(sb.nbins-1)) : 0); //regularization rows, need nbins-1 rows to link neighboring bins of each scale factor, and we have 2 sets of scale factors
-      TMatrixD A(nEquations+nRegRows, nUnknowns);
-      TVectorD d(nEquations+nRegRows);
+      int nRows = nEquations + nRegRows;
+      TMatrixD A(nRows, nUnknowns);
+      TVectorD d(nRows);
       //2 bins, region = 1, ib = 1
       for (int region = 0; region < 3; region++) {
 	for (int ib = 1; ib <= sb.nbins; ib++) {
@@ -361,35 +364,43 @@ ScaleFactors ExtractScaleFactors_simultaneous_binByBin(
       }
 
       // add smoothness/regularization rows which couple neighboring scale factors together and penalize differences
-      // lambda = 1 means "add one sigma of smoothness penalty"
       if (lambda > 0) {
 	int regRowStart = nEquations;
 	int r = 0;
 	for (int ib = 1; ib <= sb.nbins - 1; ++ib) {
-	  int row = regRowStart + r++;
+	  int row_nonQELike = regRowStart + r++;
+	  int row_pi0       = regRowStart + r++;
 	  double w = std::sqrt(lambda);
-	  //nonQELike regularization rows
-	  int col_nonQELike_pos   = (ib - 1) * 2;
-	  int col_nonQELike_neg = (ib    ) * 2;
-	  A(row, col_nonQELike_pos)   =  w;
-	  A(row, col_nonQELike_neg) = -w;
-	  d(row) = 0.0;
 
-	  //pi0 regulraization rows
+	  //nonQELike regularization rows
+	  int col_nonQELike_pos = (ib - 1) * 2;
+	  int col_nonQELike_neg = (ib    ) * 2;
+	  A(row_nonQELike, col_nonQELike_pos) =  w;
+	  A(row_nonQELike, col_nonQELike_neg) = -w;
+	  d(row_nonQELike) = 0.0;
+
+	  //pi0 regularization rows
 	  int col_pi0_pos = (ib - 1) * 2 + 1;
 	  int col_pi0_neg = (ib    ) * 2 + 1;
-	  A(row + 1, col_pi0_pos) = w;
-	  A(row + 1, col_pi0_neg) = -w;
-	  d(row + 1) = 0.0;
+	  A(row_pi0, col_pi0_pos) =  w;
+	  A(row_pi0, col_pi0_neg) = -w;
+	  d(row_pi0) = 0.0;
 	  
 	}
       }
       
       TDecompSVD svd(A);
+      //svd.SetTol(1e-3);
       Bool_t ok;
       TVectorD rhs = d;
       TVectorD x = svd.Solve(rhs, ok);
-      
+      if (isCV) {
+	std::cout << "solution vector x = [";
+	for (int j=0; j<x.GetNrows(); j++){
+	  if (j==x.GetNrows()-1) std::cout << x(j) << "]" << std::endl;
+	  else std::cout << x(j) << ", ";
+	}
+      }
       sf.WriteOutput(sb.nbins, isCV, bandName, universe_index, [&](int ib) {
 	return std::array<double,4>{ x(2*(ib-1)+1), 1.0, x(2*(ib-1)+0), 1.0 };
       });
@@ -406,7 +417,7 @@ ScaleFactors ExtractScaleFactors_simultaneous_binByBin(
 ScaleFactors ExtractScaleFactors_separate_binByBin(
     const std::vector<PlotUtils::MnvH1D*>& data_hists,
     const std::vector<std::vector<PlotUtils::MnvH1D*>>& mc_hists,
-    double lambda)
+    long long lambda)
 {
   ScaleFactors sf; //create and prep MnvH1Ds for holding scale factors, unique set per sideband and per universe
   sf.Init( mc_hists[0][0] );
@@ -449,12 +460,11 @@ ScaleFactors ExtractScaleFactors_separate_binByBin(
 	  double sigma_SR = observed_SR > 0 ? sqrt(observed_SR) : 1.0;
 	  double sigma_SB = observed_SR > 0 ? sqrt(observed_SR) : 1.0;
 
-          //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)                                           
+          //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)
           double fixed_SR     = sumBins(fixedIdx,     0, ib, sb.mc);
           double nonQELike_SR = sumBins(nonQELikeIdx, 0, ib, sb.mc);
           double pi0_SR       = sumBins(pi0Idx,       0, ib, sb.mc);
 
-	  //get my mc event counts by fitting category (either fixed, takes a pi0 scale factor, or takes a nonQELike scale factor)                                           
           double fixed_SB     = sumBins(fixedIdx,     region, ib, sb.mc);
           double nonQELike_SB = sumBins(nonQELikeIdx, region, ib, sb.mc);
           double pi0_SB       = sumBins(pi0Idx,       region, ib, sb.mc);
@@ -482,6 +492,7 @@ ScaleFactors ExtractScaleFactors_separate_binByBin(
 	
 	// Minimize chi2: ||A x - d|| using SVD
 	TDecompSVD svd(A);
+	svd.SetTol(1e-3);
 	Bool_t ok;
 	TVectorD rhs = d;            // copy RHS because Solve modifies it
 	TVectorD x = svd.Solve(rhs, ok); // vector of length nUnknowns: [b1,s1,b2,s2,...]
@@ -559,7 +570,7 @@ void saveSFPlot(PlotUtils::MnvH1D* mnvhist, const std::string& filename) {
 
 void saveStackPlot(PlotUtils::MnvH1D* data, const std::vector<PlotUtils::MnvH1D*>& mc_scaled,
 		   const std::string& outName, const std::string& titleSuffix, double dataPOT, double mcPOT) {
-  // set titles (use python's ordering & labels)
+  // set titles (use my python function's ordering & labels)
 
   std::vector<std::string> labels;
   std::vector<int> mcColors;
@@ -568,7 +579,7 @@ void saveStackPlot(PlotUtils::MnvH1D* data, const std::vector<PlotUtils::MnvH1D*
     mcColors = {4, 7, 6, 2, 5, 416};
   } else if (bkgdCategoryNames.size() == 9) {
     labels = { "Signal", "Single #pi^{+}", "Single #pi^{-}", "Single #pi^{0}", "N#pi", "Other #nu_{e}CC", "NC with #pi^{0}", "#nu_{#mu}CC with #pi^{0}", "other"};
-    mcColors = { TColor::GetColor("#0000FF"), TColor::GetColor("#00FFFF"), TColor::GetColor("#FF00FF"), TColor::GetColor("#FF0000"), TColor::GetColor("#FF8C00"), TColor::GetColor("#FFA500"), TColor::GetColor("#FFD700"), TColor::GetColor("#FFFF99"), kGreen};
+    mcColors = { TColor::GetColor("#0000FF"), TColor::GetColor("#00FFFF"), TColor::GetColor("#FF00FF"), TColor::GetColor("#FF0000"), TColor::GetColor("#DAA520"), TColor::GetColor("#FFD700"), TColor::GetColor("#FFFF00"), TColor::GetColor("#FFFACD"), kGreen};
   }
   
   PlotUtils::MnvPlotter plotter;
@@ -588,7 +599,7 @@ void saveStackPlot(PlotUtils::MnvH1D* data, const std::vector<PlotUtils::MnvH1D*
   }
   plotter.mc_line_width = 2;
   data->SetTitle("data");
-  // Create TObjArray in reverse order so the stack looks like python (signal on top)
+  // Create TObjArray in reverse order so the stack looks like the python version (signal on top)
   TObjArray array;
   array.SetOwner(false);
   for (int k = (int)mc_scaled.size()-1; k >= 0; --k) { array.Add(mc_scaled[k]); }
@@ -631,23 +642,24 @@ void CopyObjectsWithPrefix(TFile* inFile,
 
     std::string kname = key->GetName();
 
-    // Only consider keys with the requested prefix
+    // only consider keys with the requested prefix
     if (kname.find(prefix) == std::string::npos) continue;
 
-    // Skip names explicitly listed in skipNames
+    // skip names explicitly listed in skipNames
+    // these are the ones we scaled, modified, and saved after fitting. don't wanna copy the old versions over to the new file
     if (std::find(skipNames.begin(), skipNames.end(), kname) != skipNames.end()) {
       // std::cout << "Skipping modified object: " << kname << std::endl;
       continue;
     }
 
-    // Read the object (allocates an object)
+    // read the object (allocates an object)
     TObject* obj = key->ReadObj();
     if (!obj) {
       std::cerr << "Warning: cannot read object " << kname << " from " << inputFilePath << std::endl;
       continue;
     }
 
-    // Write into output file with same key name; overwrite if present
+    // write into output file with same key name; overwrite it if present
     outFile->cd();
     obj->Write(kname.c_str(), TObject::kOverwrite);
   }
@@ -691,7 +703,10 @@ int main(int argc, char** argv) {
 
   const char* dataPath = argv[1];
   const char* mcPath   = argv[2];
-  int method = std::stod(argv[3]);
+  //int method = std::stod(argv[3]);
+  long long lambda = std::stod(argv[3]);
+  std::cout << "lambda = " << lambda << std::endl;
+  int method = 3;
   if (argc >= 5) varName = argv[4]; //if a variable name is provided, use it, otherwise default to DeltaPt
 
   std::cout << "varName = " << varName << std::endl;
@@ -706,7 +721,7 @@ int main(int argc, char** argv) {
     return 3;
   }
 
-  // POT scaling
+  // get POT scaling
   double mcPOT = 1.0, dataPOT = 1.0;
   try {
     auto mp = util::GetIngredient<TParameter<double>>(*mcFile, "POTUsed");
@@ -732,7 +747,7 @@ int main(int argc, char** argv) {
   std::cout << "mc POT scale = " << mcScale << "  (dataPOT=" << dataPOT << ", mcPOT=" << mcPOT << ")\n";
 
 
-  // Load histograms (MnvH1D) for data & MC
+  // load histograms (MnvH1D) for data & MC
   std::vector<PlotUtils::MnvH1D*> data_hists;
   std::vector<std::vector<PlotUtils::MnvH1D*>> mc_hists( bkgdCategoryNames.size() );
   
@@ -771,11 +786,11 @@ int main(int argc, char** argv) {
   }
   else if (method==2) {
     methodName = "iterated_bin_by_bin";    
-    sfs = ExtractScaleFactors_separate_binByBin(data_hists, mc_hists, 0);
+    sfs = ExtractScaleFactors_separate_binByBin(data_hists, mc_hists, lambda);
   }
   else if (method==3) {
     methodName = "simultaneous_bin_by_bin";    
-    sfs = ExtractScaleFactors_simultaneous_binByBin(data_hists, mc_hists, 0);
+    sfs = ExtractScaleFactors_simultaneous_binByBin(data_hists, mc_hists, lambda);
   }
   std::cout << "Succeeded" << std::endl; 
 
@@ -794,15 +809,15 @@ int main(int argc, char** argv) {
   */
   
   // Save each scale factor histogram
-  saveSFPlot(sfs.meanFrontBkg_mnvhist, varName + methodName + "_meanFront_bkg_scale_factors");
+  saveSFPlot(sfs.meanFrontBkg_mnvhist, varName + "_" + methodName + "_meanFront_bkg_scale_factors");
   //saveSFPlot(sfs.meanFrontSig_mnvhist, varName + methodName + "meanFront_sig_scale_factors");
-  saveSFPlot(sfs.michelBkg_mnvhist, varName + methodName + "michel_bkg_scale_factors");
+  saveSFPlot(sfs.michelBkg_mnvhist, varName + "_" + methodName + "_michel_bkg_scale_factors");
   //saveSFPlot(sfs.michelSig_mnvhist, varName + methodName + "michel_sig_scale_factors");
  
-  // --- lil lambda function to build scaled versions for a given sideband index s:
-  // For s==0 (signal region): leave signal unscaled, apply michel SF to 1, and apply meanFront SF to 3&4
-  // For s==1 (MeanFront): apply meanFront bkg SF to categories 3 & 4, and sig SF to cat 0
-  // For s==2 (Michel): apply michel bkg SF to category 1, and sig SF to cat 0
+  // --- lil lambda function to build scaled versions of my distributions for a given sideband index s:
+  // For s==0 (signal region): leave signal unscaled, apply michel SF to nonQELike bkgs, and apply meanFront SF to pi0 bkgs
+  // For s==1 (MeanFront): apply meanFront bkg SF to pi0 bkgs, and sig SF to signal if applicable
+  // For s==2 (Michel): apply michel bkg SF to nonQELike bkgs, and sig SF to signal if applicable
   auto applyScaleFactors = [&](size_t s) -> std::vector<PlotUtils::MnvH1D*> {
     std::vector<PlotUtils::MnvH1D*> scaled(bkgdCategoryNames.size(), nullptr);
 
@@ -818,11 +833,9 @@ int main(int argc, char** argv) {
 	else if (s == 2){ clone->Multiply(clone, sfs.michelSig_mnvhist); }
       }
       if (std::find(nonQELikeIdx.begin(), nonQELikeIdx.end(), c) != nonQELikeIdx.end()) { //NonQELike yellow categories, scaled by michel scale factors
-	//if (s == 0 || s == 2){ clone->Multiply(clone, sfs.michelBkg_mnvhist); }
 	clone->Multiply(clone, sfs.michelBkg_mnvhist);
       }
       if (std::find(pi0Idx.begin(), pi0Idx.end(), c) != pi0Idx.end()) { //NC Pi0 (purple) and NumuCC Pi0 (teal), scale by mean front dE/dX scale factors
-	//if (s == 0 || s == 1){ clone->Multiply(clone, sfs.meanFrontBkg_mnvhist); }
 	clone->Multiply(clone, sfs.meanFrontBkg_mnvhist);
       }
 
@@ -843,7 +856,7 @@ int main(int argc, char** argv) {
   // final signal region
   saveStackPlot(data_hists[0], finalSignalScaled, (varName + "_SignalRegion_finalScaled.png"), "Signal region final scaled", dataPOT, mcPOT);
 
-  //Now calculate a chi2 for each scaled region, and a total chi2 which is the sum of all of them.
+  //Now calculate a chi2 for each scaled region (CV only), and a total chi2 which is the sum of all of them.
   double chi2_SR = 0;
   double chi2_MF = 0;
   double chi2_Michel = 0;
@@ -889,9 +902,11 @@ int main(int argc, char** argv) {
   std::cout << "  chi2 contribution from meanFront SB  = " << chi2_MF << std::endl;
   std::cout << "  chi2 contribution from Michel SB     = " << chi2_Michel << std::endl;
 
+  //Append chi^2 results to a csv, useful for evaluating a bunch of fits at once
   std::ofstream csv("chi2_results.csv", std::ios::app);  // append mode
   csv << varName << ", " << methodName << ", " << chi2_total_per_ndof << ", "
       << chi2_SR << ", " << chi2_MF << ", " << chi2_Michel << "\n";
+
   // ---------------------------
   // Write output root file containing the signal-region scaled MC histograms with original names.
   // give em the same names as the originals so ExtractCrossSection works as intended
